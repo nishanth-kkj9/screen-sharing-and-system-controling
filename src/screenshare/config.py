@@ -3,7 +3,7 @@ import os
 import secrets
 
 # Wire constants are defined ONLY in protocol.py (section 15); imported, never redefined.
-from protocol import HEADER, TYPE_JSON, TYPE_JPEG, MAX_JSON_BYTES, MAX_JPEG_BYTES  # noqa: F401
+from screenshare.protocol import HEADER, TYPE_JSON, TYPE_JPEG, MAX_JSON_BYTES, MAX_JPEG_BYTES  # noqa: F401
 
 HOST = "0.0.0.0"
 PORT = 5000

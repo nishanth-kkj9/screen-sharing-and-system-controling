@@ -6,10 +6,10 @@ import threading
 import tkinter as tk
 from tkinter import ttk, messagebox
 
-import client as client_mod
-import config
-from geometry import widget_to_norm
-from keymap import tk_keysym_to_wire
+from screenshare import client as client_mod
+from screenshare import config
+from screenshare.geometry import widget_to_norm
+from screenshare.keymap import tk_keysym_to_wire
 from PIL import ImageTk
 
 POLL_MS = 50          # GUI queue polling interval (section 7.1)
@@ -512,7 +512,7 @@ def run_host():
 
 
 def _build_server(events):
-    from server import HostServer
+    from screenshare.server import HostServer
     return HostServer(events)
 
 

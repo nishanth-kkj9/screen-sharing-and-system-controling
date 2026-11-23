@@ -8,11 +8,11 @@ import socket
 import threading
 import time
 
-import config
-import protocol
-import screen_capture
-from latest_slot import LatestSlot
-from outbox import Outbox
+from screenshare import config
+from screenshare import protocol
+from screenshare import screen_capture
+from screenshare.latest_slot import LatestSlot
+from screenshare.outbox import Outbox
 
 logger = logging.getLogger("screenshare.client")
 

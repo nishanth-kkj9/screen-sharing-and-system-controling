@@ -6,7 +6,7 @@ import time
 
 from PIL import Image
 
-import config
+from screenshare import config
 
 logger = logging.getLogger("screenshare.capture")
 

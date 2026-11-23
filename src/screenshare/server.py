@@ -11,12 +11,12 @@ import socket
 import threading
 import time
 
-import config
-import protocol
-import screen_capture
-from outbox import Outbox
-from permissions import PermissionManager
-from remote_input import RemoteInput
+from screenshare import config
+from screenshare import protocol
+from screenshare import screen_capture
+from screenshare.outbox import Outbox
+from screenshare.permissions import PermissionManager
+from screenshare.remote_input import RemoteInput
 
 logger = logging.getLogger("screenshare.server")
 

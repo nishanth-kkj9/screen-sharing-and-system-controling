@@ -9,8 +9,8 @@ module does not require PyAutoGUI.
 import logging
 import threading
 
-from keymap import ALLOWED_KEYS
-from geometry import norm_to_pixel, avoid_points
+from screenshare.keymap import ALLOWED_KEYS
+from screenshare.geometry import norm_to_pixel, avoid_points
 
 logger = logging.getLogger("screenshare.remote_input")
 
