@@ -4,15 +4,12 @@ revoke flow with a fake input backend. No real remote-control actions happen her
 (module boundary table, section 14.1)."""
 import os
 import queue
-import sys
 import threading
 import time
 import unittest
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from remote_input import RemoteInput, RESULT_OK, RESULT_NOT_CONTROLLER, RESULT_REJECTED
-from server import PermissionManager, HostServer
+from screenshare.remote_input import RemoteInput, RESULT_OK, RESULT_NOT_CONTROLLER, RESULT_REJECTED
+from screenshare.server import PermissionManager, HostServer
 
 
 class PermissionRules(unittest.TestCase):
@@ -245,9 +242,9 @@ class DisconnectMessage(unittest.TestCase):
 
     def test_disconnect_is_sent_before_close(self):
         import socket
-        import client as client_mod
-        import config
-        import protocol
+        from screenshare import client as client_mod
+        from screenshare import config
+        from screenshare import protocol
 
         received = []
         listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -289,8 +286,8 @@ class DisconnectMessage(unittest.TestCase):
 class ClientState(unittest.TestCase):
     def test_release_control_returns_to_view_only(self):
         """Section 6.2: CONTROLLING -> VIEW_ONLY on CONTROL_RELEASE."""
-        import client as client_mod
-        from outbox import Outbox
+        from screenshare import client as client_mod
+        from screenshare.outbox import Outbox
         viewer = client_mod.ViewerClient(queue.Queue(), "Laptop D")
         viewer.state = client_mod.CONTROLLING
         viewer.outbox = Outbox()
@@ -298,7 +295,7 @@ class ClientState(unittest.TestCase):
         self.assertEqual(viewer.state, client_mod.VIEW_ONLY)
         kind, data = viewer.outbox.get(0.1)
         self.assertEqual(kind, "control")
-        import protocol
+        from screenshare import protocol
         mtype, length = protocol.HEADER.unpack(data[:protocol.HEADER.size])
         self.assertEqual((mtype, length), (protocol.TYPE_JSON, len(data) - protocol.HEADER.size))
         payload = data[protocol.HEADER.size:]
@@ -306,8 +303,8 @@ class ClientState(unittest.TestCase):
 
     def test_duplicate_control_denied_keeps_control(self):
         """A late CONTROL_DENIED must not drop a Viewer the Host already granted."""
-        import client as client_mod
-        from outbox import Outbox
+        from screenshare import client as client_mod
+        from screenshare.outbox import Outbox
         viewer = client_mod.ViewerClient(queue.Queue(), "Laptop D")
         viewer.state = client_mod.CONTROLLING
         viewer.outbox = Outbox()
@@ -317,8 +314,8 @@ class ClientState(unittest.TestCase):
 
     def test_request_control_only_from_view_only(self):
         """CONTROL_REQUEST must not be queued while already controlling."""
-        import client as client_mod
-        from outbox import Outbox
+        from screenshare import client as client_mod
+        from screenshare.outbox import Outbox
         viewer = client_mod.ViewerClient(queue.Queue(), "Laptop D")
         viewer.state = client_mod.CONTROLLING
         viewer.outbox = Outbox()
@@ -364,7 +361,7 @@ class EndToEndFlow(unittest.TestCase):
         cls.server.stop_sharing()
 
     def connect_viewer(self, name):
-        import client as client_mod
+        from screenshare import client as client_mod
         events = queue.Queue()
         viewer = client_mod.ViewerClient(events, name)
         viewer.connect("127.0.0.1", self.code)
@@ -401,7 +398,7 @@ class EndToEndFlow(unittest.TestCase):
     def test_join_accept_is_first_message(self):
         """The first bytes a Viewer sees must be JOIN_ACCEPT, never a JPEG frame
         (the cached frame is queued right behind it, section 8.2)."""
-        import protocol
+        from screenshare import protocol
         import socket
         sock = socket.create_connection(("127.0.0.1", 5000), timeout=5)
         try:
@@ -417,7 +414,7 @@ class EndToEndFlow(unittest.TestCase):
     def test_join_rejects_empty_and_non_ascii_code(self):
         """An empty or non-ASCII session code is refused without killing the Host
         (compare_digest raises TypeError on non-ASCII text)."""
-        import protocol
+        from screenshare import protocol
         import socket
         for code in ("", "\u00c9" * 8):
             sock = socket.create_connection(("127.0.0.1", 5000), timeout=5)
@@ -446,7 +443,7 @@ class EndToEndFlow(unittest.TestCase):
         self.wait_frame(v2)
 
         # Third viewer is refused (MAX_VIEWERS = 2).
-        import client as client_mod
+        from screenshare import client as client_mod
         v3_events = queue.Queue()
         v3 = client_mod.ViewerClient(v3_events, "Laptop D")
         v3.connect("127.0.0.1", self.code)
@@ -546,7 +543,7 @@ class EndToEndFlow(unittest.TestCase):
     def test_invalid_input_value_keeps_session_open(self):
         """Section 5.8: a well-formed input message with bad values is answered with
         ERROR invalid_input and the session stays open."""
-        import client as client_mod
+        from screenshare import client as client_mod
         v, events = self.connect_viewer("Laptop I")
         self.addCleanup(v.disconnect)
         v.request_control()
@@ -571,8 +568,8 @@ class EndToEndFlow(unittest.TestCase):
     def test_wrong_session_code_denied_then_closed_after_three(self):
         """Host rule (sections 5.7 / 11.2 / 16): three wrong codes on one TCP
         connection get three JOIN_DENIED replies, then the connection closes."""
-        import client as client_mod
-        import protocol
+        from screenshare import client as client_mod
+        from screenshare import protocol
         events = queue.Queue()
         viewer = client_mod.ViewerClient(events, "Laptop X")
         viewer.connect("127.0.0.1", "WRONGWRD")
@@ -614,7 +611,7 @@ class SlowViewerSetting(unittest.TestCase):
 
     def test_environment_variable_is_read_safely(self):
         import importlib
-        import config
+        from screenshare import config
         original = os.environ.get("SCREENSHARE_SLOW_VIEWER_MS")
         try:
             for value, expected in (("250", 250), ("0", 0), ("abc", 0), ("-5", 0)):

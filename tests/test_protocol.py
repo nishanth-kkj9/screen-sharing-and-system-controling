@@ -1,13 +1,9 @@
 # file: tests/test_protocol.py
 """JSON message contract: required fields, types, directions and the exact reason
 lists (architecture sections 5.5, 5.7 and 5.8). Pure logic, no sockets."""
-import os
-import sys
 import unittest
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-import protocol as P
+import screenshare.protocol as P
 
 V2H = P.VIEWER_TO_HOST
 H2V = P.HOST_TO_VIEWER

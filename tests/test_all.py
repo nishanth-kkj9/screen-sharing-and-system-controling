@@ -1,11 +1,11 @@
 # file: tests/test_all.py
-import json, os, sys, threading, time, unittest
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import protocol as P
-from latest_slot import LatestSlot
-from keymap import tk_keysym_to_wire, ALLOWED_KEYS
-from geometry import norm_to_pixel, avoid_points, widget_to_norm
-from outbox import Outbox
+import json, threading, time, unittest
+
+import screenshare.protocol as P
+from screenshare.latest_slot import LatestSlot
+from screenshare.keymap import tk_keysym_to_wire, ALLOWED_KEYS
+from screenshare.geometry import norm_to_pixel, avoid_points, widget_to_norm
+from screenshare.outbox import Outbox
 
 
 class Dribble:
