@@ -87,14 +87,14 @@ class RemoteInput:
 
     @staticmethod
     def validate_move(msg):
-        import protocol
+        from screenshare import protocol
         if not (protocol.valid_norm(msg.get("x")) and protocol.valid_norm(msg.get("y"))):
             raise ValueError("invalid move coordinates")
         return float(msg["x"]), float(msg["y"])
 
     @staticmethod
     def validate_button(msg):
-        import protocol
+        from screenshare import protocol
         if msg.get("button") not in MOUSE_BUTTONS or msg.get("action") not in MOUSE_ACTIONS:
             raise ValueError("invalid mouse button/action")
         if not (protocol.valid_norm(msg.get("x")) and protocol.valid_norm(msg.get("y"))):
@@ -106,7 +106,7 @@ class RemoteInput:
         amount = msg.get("amount")
         if isinstance(amount, bool) or not isinstance(amount, int) or not (1 <= abs(amount) <= MAX_SCROLL_NOTCHES):
             raise ValueError("invalid scroll amount")
-        import protocol
+        from screenshare import protocol
         if not (protocol.valid_norm(msg.get("x")) and protocol.valid_norm(msg.get("y"))):
             raise ValueError("invalid scroll coordinates")
         return amount, float(msg["x"]), float(msg["y"])
