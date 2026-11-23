@@ -11,10 +11,11 @@ except Exception:
 import tkinter  # noqa: E402
 import sys      # noqa: E402
 
-import gui      # noqa: E402  (imports tkinter, PIL and the project modules)
 
+def main(argv=None):
+    argv = sys.argv if argv is None else argv
+    from screenshare import gui  # noqa: E402  (imports tkinter, PIL and the project modules)
 
-def main(argv):
     mode = "choose"
     args = [a for a in argv[1:] if not a.startswith("-")]
     if args:
@@ -42,6 +43,8 @@ def main(argv):
 
 
 def _launch(root, mode):
+    from screenshare import gui  # noqa: E402
+
     root.destroy()
     if mode == "host":
         gui.run_host()
