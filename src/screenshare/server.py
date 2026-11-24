@@ -32,6 +32,7 @@ class ViewerSession:
         self.addr = addr
         self.name = None
         self.authenticated = False
+        self.admitted = False              # slot taken under _sessions_lock before JOIN_ACCEPT
         self.bad_codes = 0
         # One Outbox per connection (section 7.6 rule 1): ordered control messages
         # plus one latest frame that is replaced instead of queued.
@@ -180,6 +181,9 @@ class HostServer:
         """Returns an error string on failure (GUI shows it), or None on success."""
         if self.state != "stopped":
             return None
+        problem = self._probe_frame()          # fail early, before any Viewer is told it is watching
+        if problem:
+            return "Screen capture is not available: %s" % problem
         listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -343,7 +347,9 @@ class HostServer:
                     except OSError:
                         pass
                     break
-                if len(self._sessions) >= config.MAX_VIEWERS:
+                # Spec 5.8 step 5: the Viewer limit counts JOINED Viewers. This
+                # accept-time cap only bounds sockets that are still waiting for JOIN.
+                if len(self._sessions) >= config.MAX_VIEWERS + config.MAX_PENDING_JOINS:
                     denied = True
                 else:
                     denied = False
@@ -427,7 +433,9 @@ class HostServer:
                     break                      # stream is unsynchronised; just close
                 if not self._dispatch(session, msg):
                     break
-        except (OSError, protocol.ProtocolError) as exc:
+        except (OSError, protocol.ProtocolError, protocol.ConnectionClosed) as exc:
+            # ConnectionClosed is not an OSError; a Viewer that hangs up during the
+            # JOIN phase (Test-NetConnection, a port probe, a closed laptop) is normal.
             logger.info("reader for %s ended: %r", session.display, exc)
         finally:
             session.close()
@@ -470,6 +478,16 @@ class HostServer:
                                % (session.addr[0], session.bad_codes))
                     return False
                 continue                       # retry allowed while attempts remain
+            # Spec 5.8 step 5, after the code check: take a Viewer slot atomically,
+            # so two simultaneous JOINs cannot both get the last one.
+            with self._sessions_lock:
+                full = sum(1 for s in self._sessions.values() if s.admitted) >= config.MAX_VIEWERS
+                if not full:
+                    session.admitted = True
+            if full:
+                self._emit("log", "Connection from %s refused: viewer limit reached" % session.addr[0])
+                self._send(session, {"type": "JOIN_DENIED", "reason": "viewer_limit_reached"})
+                return False
             # Authenticated.
             session.name = name
             session.sock.settimeout(None)      # C9: after JOIN_ACCEPT
@@ -518,12 +536,16 @@ class HostServer:
             if self.perm.release(session.id):
                 self.remote_input.release_all()
                 self._broadcast_status()
+            elif self.perm.cancel_pending(session.id):
+                self._emit("log", "%s cancelled the control request" % session.display)
+                self._broadcast_status()       # Host Approve/Deny buttons disable
             return True
         if mtype in INPUT_TYPES:
             # Permission is re-checked for EVERY input event (rule 6.3 #8).
-            if not self.perm.is_active(session.id):
-                return True                    # stale input after revoke: dropped silently
-            result = self.remote_input.handle(msg, True)
+            # The callable is evaluated inside input_lock (see RemoteInput.handle),
+            # so revoke_control() cannot interleave between check and injection.
+            result = self.remote_input.handle(
+                msg, lambda: self.perm.is_active(session.id))
             if result == "rejected":
                 # Well-formed message with bad values: answer invalid_input and keep
                 # the session open (section 5.8).
@@ -536,8 +558,14 @@ class HostServer:
 
     def _capture_loop(self, stop_event):
         source = None
+        failures = 0
         try:
-            source = self._frame_factory()
+            try:
+                source = self._frame_factory()
+            except Exception as exc:
+                logger.exception("screen capture could not start")
+                self._emit("warning", "Screen capture could not start: %s" % exc)
+                return
             pacer = screen_capture.FramePacer(config.TARGET_FPS)
             while not stop_event.is_set():
                 if not self._any_authenticated():
@@ -548,8 +576,12 @@ class HostServer:
                     result = source()
                 except Exception:
                     logger.exception("screen capture failed")
+                    failures += 1
+                    if failures == 5:          # warn once, not on every retry
+                        self._emit("warning", "Screen capture keeps failing; Viewers receive no new frames")
                     time.sleep(0.5)
                     continue
+                failures = 0
                 if result is None:
                     continue
                 data, size = result
@@ -570,7 +602,8 @@ class HostServer:
     # ---------------- helpers ----------------
 
     def _probe_frame(self):
-        """One-shot capture so a first JOIN_ACCEPT can carry the real frame size."""
+        """One-shot capture so a first JOIN_ACCEPT can carry the real frame size.
+        Returns None on success or an error string."""
         try:
             source = self._frame_factory()
             try:
@@ -581,8 +614,10 @@ class HostServer:
             if result is not None:
                 with self._frame_lock:
                     self._last_frame, self._last_frame_size = result
-        except Exception:
+            return None
+        except Exception as exc:
             logger.warning("initial frame probe failed", exc_info=True)
+            return str(exc) or type(exc).__name__
 
     def _any_authenticated(self):
         with self._sessions_lock:
@@ -642,7 +677,11 @@ class HostServer:
             self.remote_input.release_all()    # held keys/buttons released (9.5)
         if session.authenticated:
             self._emit("log", "Viewer '%s' disconnected (%s)" % (session.name, reason))
-        self._broadcast_status()
+            self._broadcast_status()           # S-2: a never-joined socket changes nothing
+            if not self._any_authenticated():
+                # The capture loop idles with no Viewer, so nobody else would clear
+                # the Host table and totals.
+                self._emit("stats", {"viewers": [], "fps": 0.0, "kbps": 0.0})
 
     def _emit(self, kind, data):
         self.events.put((kind, data))

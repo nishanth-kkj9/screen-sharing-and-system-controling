@@ -130,9 +130,16 @@ class RemoteInput:
 
     def handle(self, msg, is_active_controller):
         """Handle one input message. Returns one of the RESULT_* codes.
-        Every action runs under input_lock (section 7.6 rule 3)."""
+        Every action runs under input_lock (section 7.6 rule 3).
+
+        `is_active_controller` is a bool, or a zero-argument callable that is
+        evaluated INSIDE input_lock. Pass a callable from the Host so the
+        permission check and the injection are one atomic step: a revoke can then
+        never slip in between them and leave a key held (spec 6.3 rule 8)."""
         with self.input_lock:
-            return self._handle(msg, is_active_controller)
+            allowed = (is_active_controller() if callable(is_active_controller)
+                       else is_active_controller)
+            return self._handle(msg, allowed)
 
     def _handle(self, msg, is_active_controller):
         if not is_active_controller:

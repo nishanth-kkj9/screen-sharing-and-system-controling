@@ -8,6 +8,7 @@ from screenshare.protocol import HEADER, TYPE_JSON, TYPE_JPEG, MAX_JSON_BYTES, M
 HOST = "0.0.0.0"
 PORT = 5000
 MAX_VIEWERS = 2
+MAX_PENDING_JOINS = 4              # sockets allowed to wait for JOIN beyond the admitted Viewers
 PROTOCOL_VERSION = 1
 
 # Image pipeline.

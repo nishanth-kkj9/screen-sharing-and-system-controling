@@ -41,7 +41,8 @@ network-screen-sharing/
 │   ├── __init__.py
 │   ├── test_all.py        # Section-24 reference tests (framing, slot, outbox, keys, geometry)
 │   ├── test_protocol.py   # JSON contract: fields, directions, reason lists (sections 5.5-5.8)
-│   └── test_permissions.py# Single-controller rules + loopback integration flow
+│   ├── test_permissions.py# Single-controller rules + loopback integration flow
+│   └── test_audit_fixes.py   # regression tests for the audit defects (DEF-1..DEF-6)
 └── docs/
     ├── wireshark_demo.md  # Capture procedure, filters, demonstration sequence
     ├── test_results.md    # What has actually been tested, and what has not
@@ -68,9 +69,10 @@ The application is started with `screenshare host` on the sharing laptop and
   boundaries, which TCP's byte stream does not preserve.
 - **Host pipeline:** MSS grabs the primary monitor once per frame → Pillow converts
   to RGB and resizes (aspect preserved, at most 1280×720) → one JPEG (quality 65) is
-  encoded and the same bytes go to every Viewer → each Viewer's writer sends the
-  newest frame from a one-item `LatestSlot` (no queue buildup), after draining
-  pending control messages.
+  encoded and the same bytes go to every Viewer → each Viewer has one `Outbox`
+  (control messages first, plus a single latest-frame slot that is replaced,
+  never queued); that Viewer's writer thread sends from it, so a slow Viewer
+  cannot build up a backlog.
 - **Threads (Host):** GUI, accept worker, capture worker, plus one reader and one
   writer worker per Viewer socket. Only a connection's writer ever calls `sendall()`
   on that socket. The Viewer has the mirror-image model. GUI updates happen only on
@@ -93,6 +95,8 @@ The application is started with `screenshare host` on the sharing laptop and
   codecs (non-goals of version 1).
 - Remote input does not reach UAC prompts, the lock screen or other protected
   desktops; display scaling can affect cursor alignment (verify on the real Host).
+- The mode argument is optional: with no or an unknown mode a Host/Viewer chooser
+  opens (the spec says to print usage; this was a deliberate choice).
 
 See `docs/test_results.md` for what has and has not been verified on real hardware,
 and `docs/wireshark_demo.md` for the packet-analysis demonstration.

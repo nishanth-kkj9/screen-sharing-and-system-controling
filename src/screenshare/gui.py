@@ -480,7 +480,10 @@ class ViewerWindow:
         self.disconnect_button.config(state="normal" if connected else "disabled")
         self.request_button.config(
             state="normal" if state == client_mod.VIEW_ONLY else "disabled")
-        self.release_button.config(state="normal" if controlling else "disabled")
+        pending = state == client_mod.REQUEST_PENDING
+        self.release_button.config(
+            state="normal" if (controlling or pending) else "disabled",
+            text="Cancel Request" if pending else "Release Control")
 
     def _on_join_denied(self, reason):
         friendly = {

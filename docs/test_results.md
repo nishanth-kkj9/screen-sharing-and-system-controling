@@ -1,5 +1,7 @@
 # Test Results — recorded honestly (section 0, rule 11)
 
+Current suite: 80 tests (sections 1, 6 and 9 describe earlier builds).
+
 Nothing below was invented. Every line states what was actually run, where, and
 what happened. Items marked **[U]** have **not** been run on the real Windows
 laptops and must be tested there before the demonstration.
@@ -539,4 +541,42 @@ key presses), not by synthetic messages inside the app.
 - Windows Firewall *Private* profile inbound rule (section 5) — **`[U]`**.
 - Wireshark `.pcapng` capture of the application traffic — **`[U]`**.
 - The section 11.4 FIN-sequence proof on the wire — **`[U]`**.
+
+## 13. Audit defects DEF-1..DEF-6 fixed on branch `fix/audit-defects` (2026-11-24)
+
+Patch from `AGENT_FIX_GUIDE.md` section 3 applied with `git apply` (checked
+first with `git apply --check`, exit 0); the 16 tests of section 4 added as
+`tests/test_audit_fixes.py`. Windows laptop, Python 3.15.2, project venv.
+
+| Command | Result |
+| --- | --- |
+| `.venv\Scripts\python.exe -m unittest discover -s tests` | `Ran 80 tests in 27.993s` → `OK` (64 old + 16 new) |
+| `.venv\Scripts\python.exe -m compileall -q src tests demo` | exit 0 |
+| red — `git stash push -- src`, then `python -m unittest tests.test_audit_fixes` | `Ran 16 tests in 16.553s` → `FAILED (failures=12, errors=3)` = 15 of 16 fail, the third-Viewer guard passes (exactly as the guide states) |
+| green — `git stash pop`, then `python -m unittest tests.test_audit_fixes` | `Ran 16 tests in 8.407s` → `OK` |
+
+Live GUI checks on this laptop (windows-mcp screenshots; **control was never
+granted**):
+
+| Check | Observed |
+| --- | --- |
+| DEF-5, Host *Start Sharing* with real capture | state `listening`, TCP 5000 on all interfaces, address `192.168.164.112`, log `Sharing started; listening on TCP port 5000` — no capture-probe error |
+| Viewer Connect over loopback | state `view-only`, live frames on the canvas, Host log `Viewer 'LAPTOP-NHODPEG5' connected from 127.0.0.1:56745` |
+| M-1 / DEF-3, *Request Control* then *Cancel Request* | while pending the Viewer button read `Cancel Request`; after the click the Viewer returned to `view-only` and the Host logged `LAPTOP-NHODPEG5 cancelled the control request`; pending cleared, Approve/Deny greyed out again |
+| M-4 / DEF-6, Viewer disconnect | table row cleared, log shows `Viewer 'LAPTOP-NHODPEG5' disconnected (writer exited)` — **but the `Total:` line kept a stale negative value (see below)** |
+
+**New finding (not in the guide; not fixed — needs the student's decision):**
+after the last Viewer leaves, the Host `Total:` line can show a negative rate
+(example: `Total: -3957.7 FPS, -370228.4 KB/s`) and stays that way while idle.
+Cause: `stats_snapshot()` in `server.py` subtracts `_stats_mark`, which still
+holds the departed Viewer's cumulative counters, so the capture tick that races
+the disconnect emits negative `fps`/`kbps` after the DEF-6 empty-stats event and
+overwrites it. The table row clears; the Total line does not, so M-4 is only
+half met on this machine.
+
+Still **[U]** (`AGENT_FIX_GUIDE.md` section 6): M-2 `Test-NetConnection` from a
+second machine, M-3 capture-failure message when capture really fails, M-5
+revoke-while-typing on two laptops, M-6 Python 3.10, M-7 / E-1..E-8 (two or
+three laptops, Wireshark `.pcapng`, FIN proof, flow-control run, firewall rule
+on the second machine, 150 % scaling).
 

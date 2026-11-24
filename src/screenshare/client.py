@@ -136,11 +136,17 @@ class ViewerClient:
             self._enqueue({"type": "CONTROL_REQUEST"})
 
     def release_control(self):
+        """CONTROLLING -> VIEW_ONLY (release) and REQUEST_PENDING -> VIEW_ONLY
+        (cancel the request), section 6.2. Ignored in any other state."""
+        with self._lock:
+            previous = self.state
+        if previous not in (CONTROLLING, REQUEST_PENDING):
+            return
         self._enqueue({"type": "CONTROL_RELEASE"})
         # The Host stops accepting our input the moment it processes the release,
         # so the local state must not keep claiming control (section 6.2).
-        if self.state == CONTROLLING:
-            self._set_state(VIEW_ONLY, "control released")
+        self._set_state(VIEW_ONLY, "control released" if previous == CONTROLLING
+                        else "control request cancelled")
 
     def send_move(self, nx, ny):
         """Latest-position slot so stale moves are replaced, never queued (7.4)."""
@@ -238,17 +244,17 @@ class ViewerClient:
             self._set_state(VIEW_ONLY, "connected (view-only)")
             return True
         if mtype == "JOIN_DENIED":
-            reason = msg.get("reason", "unknown")
-            if reason == "invalid_session_code":
-                self._emit("join_denied", reason)
-                return False                  # GUI lets the user retry the join
-            self._emit("join_denied", reason)
-            return False
+            self._emit("join_denied", msg.get("reason", "unknown"))
+            return False                      # the user clicks Connect again to retry
         if mtype == "STATUS":
             self._emit("status", msg)
             return True
         if mtype == "CONTROL_GRANTED":
-            self._set_state(CONTROLLING, "control granted")
+            # A cancel can cross a grant on the wire. Only a Viewer that is still
+            # waiting may become the controller; otherwise the Host has (or will)
+            # release it and the UI must not claim control.
+            if self.state == REQUEST_PENDING:
+                self._set_state(CONTROLLING, "control granted")
             return True
         if mtype == "CONTROL_DENIED":
             if self.state == CONTROLLING:

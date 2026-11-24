@@ -1,0 +1,23 @@
+// Last matching rule wins, so broad rules come first. Shape checked against the opencode permissions docs; PowerShell command patterns are untested.
+{
+  "$schema": "https://opencode.ai/config.json",
+  "permissions": [
+    { "action": "shell", "resource": "*", "effect": "ask" },
+    { "action": "shell", "resource": ".\\.venv\\Scripts\\python.exe -m unittest *", "effect": "allow" },
+    { "action": "shell", "resource": "python -m unittest *", "effect": "allow" },
+    { "action": "shell", "resource": "python -m compileall *", "effect": "allow" },
+    { "action": "shell", "resource": "git status *", "effect": "allow" },
+    { "action": "shell", "resource": "git diff *", "effect": "allow" },
+    { "action": "shell", "resource": "git log *", "effect": "allow" },
+    { "action": "shell", "resource": "git push *", "effect": "deny" },
+    { "action": "shell", "resource": "git reset --hard *", "effect": "deny" },
+    { "action": "shell", "resource": "Remove-Item *", "effect": "deny" },
+    { "action": "edit", "resource": "ARCHITECTURE_FINAL_v5.md", "effect": "deny" },
+    { "action": "edit", "resource": "demo/transport_demos.py", "effect": "deny" },
+    { "action": "edit", "resource": "src/screenshare/protocol.py", "effect": "ask" },
+    { "action": "edit", "resource": "src/screenshare/outbox.py", "effect": "ask" },
+    { "action": "edit", "resource": "src/screenshare/latest_slot.py", "effect": "ask" },
+    { "action": "edit", "resource": "src/screenshare/keymap.py", "effect": "ask" },
+    { "action": "edit", "resource": "src/screenshare/geometry.py", "effect": "ask" }
+  ]
+}

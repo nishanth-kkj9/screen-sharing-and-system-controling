@@ -73,6 +73,15 @@ class PermissionManager:
                 return True
             return False
 
+    def cancel_pending(self, viewer_id):
+        """The pending Viewer withdraws its own request (spec 6.3 rule 9).
+        Returns True if a pending request of this Viewer was cleared."""
+        with self._lock:
+            if self.pending_controller_id == viewer_id:
+                self.pending_controller_id = None
+                return True
+            return False
+
     def drop(self, viewer_id):
         """Viewer disconnected. Returns (was_pending, was_active)."""
         with self._lock:
