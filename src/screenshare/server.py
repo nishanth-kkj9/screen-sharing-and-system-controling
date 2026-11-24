@@ -319,8 +319,10 @@ class HostServer:
             bytes_ += session.bytes_sent
         mark_time, mark_frames, mark_bytes = self._stats_mark
         elapsed = now - mark_time
-        fps = (frames - mark_frames) / elapsed if elapsed > 0 else 0.0
-        kbps = (bytes_ - mark_bytes) / elapsed / 1024.0 if elapsed > 0 else 0.0
+        # Viewers that leave lower the totals between two ticks; a rate of sent
+        # data can never be negative, so the tick racing a disconnect reports 0.
+        fps = max(0.0, (frames - mark_frames) / elapsed) if elapsed > 0 else 0.0
+        kbps = max(0.0, (bytes_ - mark_bytes) / elapsed / 1024.0) if elapsed > 0 else 0.0
         self._stats_mark = (now, frames, bytes_)
         return {"viewers": rows, "fps": fps, "kbps": kbps}
 

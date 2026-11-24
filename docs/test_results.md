@@ -1,6 +1,6 @@
 # Test Results — recorded honestly (section 0, rule 11)
 
-Current suite: 80 tests (sections 1, 6 and 9 describe earlier builds).
+Current suite: 82 tests (sections 1, 6 and 9 describe earlier builds).
 
 Nothing below was invented. Every line states what was actually run, where, and
 what happened. Items marked **[U]** have **not** been run on the real Windows
@@ -563,16 +563,26 @@ granted**):
 | DEF-5, Host *Start Sharing* with real capture | state `listening`, TCP 5000 on all interfaces, address `192.168.164.112`, log `Sharing started; listening on TCP port 5000` — no capture-probe error |
 | Viewer Connect over loopback | state `view-only`, live frames on the canvas, Host log `Viewer 'LAPTOP-NHODPEG5' connected from 127.0.0.1:56745` |
 | M-1 / DEF-3, *Request Control* then *Cancel Request* | while pending the Viewer button read `Cancel Request`; after the click the Viewer returned to `view-only` and the Host logged `LAPTOP-NHODPEG5 cancelled the control request`; pending cleared, Approve/Deny greyed out again |
-| M-4 / DEF-6, Viewer disconnect | table row cleared, log shows `Viewer 'LAPTOP-NHODPEG5' disconnected (writer exited)` — **but the `Total:` line kept a stale negative value (see below)** |
+| M-4 / DEF-6, Viewer disconnect | table row cleared, log shows `Viewer 'LAPTOP-NHODPEG5' disconnected (writer exited)` — this run also exposed the negative-`Total` bug, fixed below |
 
-**New finding (not in the guide; not fixed — needs the student's decision):**
-after the last Viewer leaves, the Host `Total:` line can show a negative rate
-(example: `Total: -3957.7 FPS, -370228.4 KB/s`) and stays that way while idle.
+**New finding (found by the M-4 check above; fixed on the same branch):**
+after the last Viewer leaves, the Host `Total:` line could show a negative rate
+(example: `Total: -3957.7 FPS, -370228.4 KB/s`) and stayed that way while idle.
 Cause: `stats_snapshot()` in `server.py` subtracts `_stats_mark`, which still
 holds the departed Viewer's cumulative counters, so the capture tick that races
-the disconnect emits negative `fps`/`kbps` after the DEF-6 empty-stats event and
-overwrites it. The table row clears; the Total line does not, so M-4 is only
-half met on this machine.
+the disconnect emitted negative `fps`/`kbps` after the DEF-6 empty-stats event
+and overwrote it. The table row cleared; the Total line did not.
+
+Fixed by clamping both rates at `0.0` (a rate of sent data can never be
+negative), red→green:
+
+| Step | Result |
+| --- | --- |
+| red — `python -m unittest tests.test_stats_rates` before the fix | `Ran 2 tests` → `FAILED (failures=2)`, e.g. `AssertionError: -9345824.910784228 not greater than or equal to 0.0` |
+| fix — `max(0.0, ...)` on both rates in `stats_snapshot()` (`src/screenshare/server.py`) | — |
+| green — `python -m unittest tests.test_stats_rates` | `Ran 2 tests` → `OK` |
+| full suite | `Ran 82 tests in 27.875s` → `OK`, `compileall` exit 0 |
+| live re-check (windows-mcp, two connect/disconnect cycles) | while streaming `Total: 5.0 FPS, 429.5 KB/s`; after each disconnect, and again 6 s later: `Total: 0.0 FPS, 0.0 KB/s` — never negative. M-4 now fully met on this laptop |
 
 Still **[U]** (`AGENT_FIX_GUIDE.md` section 6): M-2 `Test-NetConnection` from a
 second machine, M-3 capture-failure message when capture really fails, M-5

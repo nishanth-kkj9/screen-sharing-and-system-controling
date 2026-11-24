@@ -253,9 +253,9 @@ protected desktops; Windows blocks synthetic input there by design.
 
 **Stop any running Host first.** The suite's loopback tests bind real TCP sockets
 on `127.0.0.1:5000`. If that bind fails the end-to-end class is **skipped** and the
-run reports `OK (skipped=...)` instead of 80 passing tests; on Windows
+run reports `OK (skipped=...)` instead of 82 passing tests; on Windows
 `SO_REUSEADDR` can even let the test Host bind alongside a running one, which gives
-confusing results. Stop the Host first and the full 80 pass.
+confusing results. Stop the Host first and the full 82 pass.
 
 ```powershell
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
@@ -264,16 +264,17 @@ confusing results. Stop the Host first and the full 80 pass.
 Expected result:
 
 ```text
-Ran 80 tests in ...
+Ran 82 tests in ...
 OK
 ```
 
-The 80 tests are: 18 section-24 reference tests (framing, slot, outbox, keys,
+The 82 tests are: 18 section-24 reference tests (framing, slot, outbox, keys,
 geometry), 12 protocol-contract tests (required fields, directions, reason
 lists), 34 permission/input/statistics tests including a full loopback flow
 (two viewers, grant, revoke, held-key release, viewer limit, wrong codes,
-non-ASCII codes, JOIN_ACCEPT ordering, graceful disconnect), and 16 regression
-tests for the audit defects (`tests/test_audit_fixes.py`, DEF-1..DEF-6). No real
+non-ASCII codes, JOIN_ACCEPT ordering, graceful disconnect), 16 regression
+tests for the audit defects (`tests/test_audit_fixes.py`, DEF-1..DEF-6) and 2
+stat-rate tests (`tests/test_stats_rates.py`, negative Host rates). No real
 mouse is moved and no display is required.
 
 ---
@@ -350,7 +351,7 @@ full session (handshake → JOIN/JPEG data → control grant → revoke → FIN)
 | Remote input does nothing | not `controlling`, allowlist key, or UAC/lock screen | check the state label; only allowlisted keys are forwarded; UAC prompts cannot be controlled |
 | Control stops by itself, Host warns about the fail-safe | Host's physical mouse was moved into a screen corner | move the mouse away; request control again |
 | Remote cursor is offset from the real one | display scaling differs between laptops | the app sets per-monitor DPI awareness; 125% has been verified, other values should be checked on the real Host |
-| Tests report `OK (skipped=...)` instead of 80 passing | a Host still holds port 5000, so the loopback tests skipped (or, with `SO_REUSEADDR`, bound a second listener) | stop the Host, then re-run the suite |
+| Tests report `OK (skipped=...)` instead of 82 passing | a Host still holds port 5000, so the loopback tests skipped (or, with `SO_REUSEADDR`, bound a second listener) | stop the Host, then re-run the suite |
 | PowerShell blocks `Activate.ps1` | execution policy | `Set-ExecutionPolicy -Scope Process Bypass`, or call `.venv\Scripts\python.exe` directly |
 
 ---
@@ -359,7 +360,7 @@ full session (handshake → JOIN/JPEG data → control grant → revoke → FIN)
 
 `docs/test_results.md` records every check honestly. In short:
 
-- **Verified:** the 80-test suite, the entry points, real screen capture over
+- **Verified:** the 82-test suite, the entry points, real screen capture over
   loopback, a live Host/Viewer session with control granted and revoked, and
   remote mouse/keyboard/scroll delivery — on Windows 11 at 125% display scaling.
 - **Not verified yet `[U]`:** two real laptops over a hotspot/router, 150%

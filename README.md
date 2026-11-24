@@ -42,7 +42,8 @@ network-screen-sharing/
 │   ├── test_all.py        # Section-24 reference tests (framing, slot, outbox, keys, geometry)
 │   ├── test_protocol.py   # JSON contract: fields, directions, reason lists (sections 5.5-5.8)
 │   ├── test_permissions.py# Single-controller rules + loopback integration flow
-│   └── test_audit_fixes.py   # regression tests for the audit defects (DEF-1..DEF-6)
+│   ├── test_audit_fixes.py   # regression tests for the audit defects (DEF-1..DEF-6)
+│   └── test_stats_rates.py   # Host stat rates are never negative after a disconnect
 └── docs/
     ├── wireshark_demo.md  # Capture procedure, filters, demonstration sequence
     ├── test_results.md    # What has actually been tested, and what has not
