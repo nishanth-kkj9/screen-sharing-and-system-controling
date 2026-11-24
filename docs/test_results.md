@@ -464,3 +464,74 @@ regenerable `__pycache__` directories removed. `network-screen-sharing-starter/`
 is **kept unchanged** as the provided kit (provenance of `outbox.py` and
 `demo/transport_demos.py`; the spec forbids editing provided code).
 
+> **Superseded by section 12:** the flat root layout described here was later
+> moved into the `src/screenshare/` package as a deliberate project decision.
+> Everything else in this section still holds.
+
+## 12. `src/` package layout move, then a live session on the new layout — PASS
+
+### What moved
+
+The 12 modules (`config`, `protocol`, `server`, `client`, `screen_capture`,
+`latest_slot`, `outbox`, `permissions`, `keymap`, `geometry`, `remote_input`,
+`gui`) plus `app.py` moved into the importable package `src/screenshare/`, with
+`__init__.py`, `__main__.py` and a `pyproject.toml` console script
+(`screenshare host|viewer`). This is a deliberate departure from section 14's flat
+root layout, chosen for presentation; no protocol, timing, threading or permission
+behaviour was touched.
+
+Byte-level check of the move: across the 13 moved files, only **20 import lines**
+changed (`from config import ...` → `from screenshare import ...`, including three
+indented imports inside functions in `remote_input.py` that the first pass missed).
+Every other line is identical (`git diff -M`).
+
+`requirements.txt` was deleted; the same three dependency bounds now live only in
+`pyproject.toml`, installed with a project-local editable install
+(`python -m pip install -e .`). The `.venv` stays outside version control.
+
+### Untouched files (SHA-256 compared before and after)
+
+17 files, all identical, including `ARCHITECTURE_FINAL_v5.md`,
+`demo/transport_demos.py` and the whole `network-screen-sharing-starter/` kit.
+
+### Automated verification on the new layout
+
+| Check | Result |
+| --- | --- |
+| `.venv\Scripts\python.exe -m unittest discover -s tests` | **PASS** — `Ran 64 tests … OK` (same 18 / 12 / 34 split) |
+| `python -m compileall -q src tests` | **PASS** — exit 0 |
+| `python -c "import screenshare.app"` | **PASS** |
+| Console script `screenshare = screenshare.app:main` | **PASS** — resolves and starts |
+| No `sys.path.insert` left in `tests/`, no flat `import config`-style imports left | **PASS** (grep) |
+
+### Live session on the new layout (real Tk, real OS input, loopback)
+
+Run at **125% Windows display scaling** (DPI 120, 1920×1080 physical) — the scaling
+of this laptop — so cursor alignment was exercised at 125%.
+
+Both entry points were started under the new layout (`screenshare` Host GUI and
+`python -m screenshare viewer`). The Host ran with a recording backend that logs
+what PyAutoGUI would receive instead of injecting it, so the automated session
+could not move this laptop's own mouse and create a feedback loop. Mouse and
+keyboard actions were produced by real OS input (the visible cursor moves, real
+key presses), not by synthetic messages inside the app.
+
+| Step | Observed |
+| --- | --- |
+| Host: *Start Sharing* (real click) | `listening`, TCP 5000 on all interfaces, session code `TV4ZCA87` |
+| Viewer: session code + *Connect* | stream live: 1434 frames, ~4.9 FPS, ~540 KB/s; Viewer canvas shows the Host desktop |
+| Viewer: *Request Control* | Host shows `request pending` |
+| Host: *Approve* | both windows show `controlling`, `Controller: LAPTOP-NHOOFE65` |
+| Host recorder log (hover, click, drag, wheel, keys) | 65 moves, 3 left-down + 3 left-up, 2 wheel notches, `key_down a` / `key_up a`, `key_down shift` / `key_up shift` |
+| One drag across the Viewer canvas | Host side: 1 left-down, 46 moves, 1 left-up |
+| Host: *Revoke Control* | Host `Controller: none`, Viewer `view-only` (viewing continues) |
+| Clicks and moves after revoke | **none** reached the Host (recorder log 84 → 84 lines) |
+
+### Still NOT tested after this move **[U]**
+
+- Two real laptops over a hotspot or router (section 5) — **`[U]`**.
+- 150% scaling — **`[U]`** (125% is now covered above).
+- Windows Firewall *Private* profile inbound rule (section 5) — **`[U]`**.
+- Wireshark `.pcapng` capture of the application traffic — **`[U]`**.
+- The section 11.4 FIN-sequence proof on the wire — **`[U]`**.
+

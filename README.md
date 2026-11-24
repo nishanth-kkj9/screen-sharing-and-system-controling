@@ -14,24 +14,28 @@ single-controller remote mouse and keyboard control.
 
 ```text
 network-screen-sharing/
-├── app.py                 # Entry point; DPI awareness is set FIRST (section 13.4)
-├── config.py              # Port, limits, frame rate, image size, session-code constants
-├── protocol.py            # 5-byte header, exact reads, JSON validation (section 24 code)
-├── server.py              # Host listener, Viewer sessions, permission coordination, lifecycle
-├── client.py              # Viewer connection, reader and serialized writer
-├── screen_capture.py      # MSS capture, Pillow JPEG encode/decode, frame pacing
-├── latest_slot.py         # One-item latest-value slot (section 24 code)
-├── outbox.py              # Per-connection control queue + latest frame (section 24 code)
-├── permissions.py         # PermissionManager: pending/active controller state (section 6.3)
-├── keymap.py              # Tkinter keysym -> PyAutoGUI wire names (section 24 code)
-├── geometry.py            # Coordinate and fail-safe helpers (section 24 code)
-├── remote_input.py        # Input validation and allowlisted PyAutoGUI execution
-├── gui.py                 # Tkinter Host and Viewer interfaces
+├── pyproject.toml          # Package metadata, dependency bounds, console script
+├── src/
+│   └── screenshare/
+│       ├── __init__.py
+│       ├── __main__.py     # `python -m screenshare`
+│       ├── app.py          # Entry point; DPI awareness is set FIRST (section 13.4)
+│       ├── config.py       # Port, limits, frame rate, image size, session-code constants
+│       ├── protocol.py     # 5-byte header, exact reads, JSON validation (section 24 code)
+│       ├── server.py       # Host listener, Viewer sessions, permission coordination, lifecycle
+│       ├── client.py       # Viewer connection, reader and serialized writer
+│       ├── screen_capture.py # MSS capture, Pillow JPEG encode/decode, frame pacing
+│       ├── latest_slot.py  # One-item latest-value slot (section 24 code)
+│       ├── outbox.py       # Per-connection control queue + latest frame (section 24 code)
+│       ├── permissions.py  # PermissionManager: pending/active controller state (section 6.3)
+│       ├── keymap.py       # Tkinter keysym -> PyAutoGUI wire names (section 24 code)
+│       ├── geometry.py     # Coordinate and fail-safe helpers (section 24 code)
+│       ├── remote_input.py # Input validation and allowlisted PyAutoGUI execution
+│       └── gui.py          # Tkinter Host and Viewer interfaces
 ├── demo/
 │   └── transport_demos.py # Separate Module-4 demos (TCP 6000, standard library only)
-├── requirements.txt
 ├── README.md
-├── .gitignore             # .venv/, __pycache__/, *.pyc
+├── .gitignore             # .venv/, __pycache__/, *.pyc, build artifacts
 ├── tests/
 │   ├── __init__.py
 │   ├── test_all.py        # Section-24 reference tests (framing, slot, outbox, keys, geometry)
@@ -62,16 +66,18 @@ not part of the source tree.
    python -m venv .venv
    .\.venv\Scripts\Activate.ps1          # cmd.exe: .\.venv\Scripts\activate.bat
    python -m pip install --upgrade pip
-   python -m pip install -r requirements.txt
+   python -m pip install -e .
    ```
 
-   `requirements.txt` pins `mss>=10.2,<11` because `from mss import MSS` and
-   `sct.primary_monitor` require mss 10.2.0 or newer.
+   `pyproject.toml` holds the dependency bounds — `mss>=10.2,<11` (because
+   `from mss import MSS` and `sct.primary_monitor` require mss 10.2.0 or newer),
+   `Pillow>=10.0` and `PyAutoGUI>=0.9.54`. The editable install puts the
+   `screenshare` package on the import path and creates the `screenshare` command.
 
    If PowerShell blocks the activation script, either run
    `Set-ExecutionPolicy -Scope Process Bypass` for that window only, or skip
    activation and call the interpreter directly:
-   `.\.venv\Scripts\python.exe app.py host`.
+   `.\.venv\Scripts\python.exe -m screenshare host`.
 
 3. Allow inbound TCP 5000 on the Private firewall profile (Host laptop, elevated
    PowerShell — only when you understand the profile scope):
@@ -90,9 +96,12 @@ With the virtual environment activated (or prefix every command with
 `.\.venv\Scripts\python.exe`):
 
 ```powershell
-python app.py            # shows a mode chooser
-python app.py host       # or start straight into Host mode
-python app.py viewer     # or straight into Viewer mode
+screenshare                       # shows a mode chooser
+screenshare host                  # or start straight into Host mode
+screenshare viewer                # or straight into Viewer mode
+
+.\.venv\Scripts\python.exe -m screenshare host     # same, without the console script
+.\.venv\Scripts\python.exe -m screenshare viewer
 ```
 
 **Host:** click *Start Sharing*. The window shows the LAN IPv4 address, TCP port 5000
@@ -110,6 +119,9 @@ If it fails, check the IP, server state, firewall and hotspot client/AP isolatio
 (some phone hotspots block device-to-device traffic; use a Wi-Fi router instead).
 
 ## Running the tests
+
+Install the package once first (editable install: `python -m pip install -e .`),
+then run the suite:
 
 ```powershell
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
