@@ -19,6 +19,11 @@ sandbox results and are kept as they were. The runtime dependencies now live in
 the project-local `.venv`; the 42-test suite and the Windows smoke script were
 re-run through `.venv\Scripts\python.exe` with the same results.
 
+The dependency set changed once after this record: the editable install described
+in section 12 re-resolved `Pillow>=10.0` to **Pillow 13.0.0** (`mss` stayed
+10.2.0, PyAutoGUI 0.9.54). The 64-test suite and the live session in section 12
+ran on those versions with no code changes.
+
 ## 1. Automated unit tests — PASS (42/42)
 
 Command: `python -m unittest discover -s tests -v`
@@ -274,8 +279,8 @@ administrator, and loopback traffic is not captured here).
   -DisplayName "*5000*"` returned **no rule**, and all three profiles (Domain,
   Private, Public) are enabled with `DefaultInboundAction = NotConfigured`.
   Connections from the same machine to `192.168.239.112:5000` still worked, but a
-  real second laptop may be blocked until the rule from the README is added in an
-  elevated PowerShell. Adding the rule was **not** attempted (no administrator
+  real second laptop may be blocked until the rule from `SETUP_GUIDE.md` is added
+  in an elevated PowerShell. Adding the rule was **not** attempted (no administrator
   rights here) — this remains **[U]**.
 - **Thread accounting.** After Stop Sharing the suite's thread check and the smoke
   script both leave no reader/writer/capture/accept workers behind; the listening
