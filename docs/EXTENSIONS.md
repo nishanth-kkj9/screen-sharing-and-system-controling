@@ -28,11 +28,19 @@ JSON file in `%APPDATA%\screenshare\settings.json`. Host: port, FPS, JPEG qualit
 screen size, maximum Viewers (1 or 2). Viewer: port, name, slow-Viewer delay (flow-control
 demonstration), last Host address. Values are validated; a corrupt file falls back to defaults.
 Settings apply only while stopped or disconnected.
+`SCREENSHARE_SLOW_VIEWER_MS` (milliseconds) still sets the slow-Viewer delay when the settings value
+is `0`, and `SCREENSHARE_SETTINGS` points the app at a different settings file (the tests use it).
 
 ## 5. Offline analysis tool (`tools/pcap_report.py`)
 Reads a Wireshark capture with Scapy and prints handshake, retransmissions, duplicate ACKs,
 zero-window events, window sizes and FIN/RST. Optional; not part of the application.
 Install with `pip install -r tools/requirements-tools.txt`.
+
+## 6. Known limits
+- A `messagebox` is modal inside the GUI poll loop, so the window stops refreshing until it is dismissed.
+- The statistics under-report one tick when a Viewer leaves (the empty-stats event replaces that tick).
+- There is no capture-thread restart: if capture fails, stop and start sharing again.
+- The session code and the screen image are plaintext on a trusted LAN, by design; there is no TLS.
 
 ## What was NOT changed
 Port, header, max Viewers, runtime packages (`mss`, `Pillow`, `PyAutoGUI` only), fail-safe.

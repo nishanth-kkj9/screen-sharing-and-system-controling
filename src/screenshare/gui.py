@@ -27,7 +27,7 @@ class HostWindow:
         self.events = queue.Queue()
         self.server = server_factory(self.events)
         root.title("Screen Share - Host (TCP %d)" % config.PORT)
-        root.minsize(480, 420)
+        root.minsize(700, 560)
         self.demo = None
         self._build_menu()
 
@@ -57,7 +57,7 @@ class HostWindow:
         columns = ("peer", "time", "frames", "bytes", "skipped")
         self.stats_table = ttk.Treeview(viewers, columns=columns, height=4)
         self.stats_table.heading("#0", text="Viewer")
-        self.stats_table.column("#0", width=150, anchor="w")
+        self.stats_table.column("#0", width=190, anchor="w")
         for column, title, width in (("peer", "Peer ip:port", 150), ("time", "Connected", 80),
                                      ("frames", "Frames", 70), ("bytes", "Bytes", 90),
                                      ("skipped", "Skipped", 70)):
@@ -392,7 +392,7 @@ class TransportDashboard(tk.Toplevel):
         widths = (80, 80, 115, 80, 85, 105, 85, 115)        # wide enough for each heading
         self.table = ttk.Treeview(top, columns=columns, height=3)
         self.table.heading("#0", text=transport_view.VIEWER_COLUMNS[0])
-        self.table.column("#0", width=130, anchor="w")
+        self.table.column("#0", width=190, anchor="w")
         for column, width in zip(columns, widths):
             self.table.heading(column, text=column)
             self.table.column(column, width=width, anchor="e")

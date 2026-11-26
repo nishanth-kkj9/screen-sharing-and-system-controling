@@ -5,7 +5,8 @@ Run `python -m unittest discover -s tests` first. Stop any other Host first (por
 1. **Start**: Host: Start Sharing, then open **Menu > Transport Dashboard** (menu bar; **Menu > Demo > Demo guide** walks the steps). Two Viewers connect.
    Say: one TCP connection per Viewer; the dashboard shows each Viewer's App RTT and TCP RTT.
 2. **Connection management** (Wireshark, filter `tcp.port == 5000`): show SYN, SYN-ACK, ACK;
-   then Disconnect a Viewer and show FIN/ACK.
+   then Disconnect a Viewer and show FIN/ACK. A normal Disconnect ends with FIN/ACK; a RST appears
+   only when a peer dies abruptly (process killed, cable pulled), so FIN means an orderly close.
 3. **Acknowledgement and sequence numbers**: click a data segment, show seq/ack/window; point to
    "In flight" and "Send window" on the dashboard.
 4. **Flow control**: on one Viewer: Settings, "Slow Viewer delay" 300, Save, reconnect. The
