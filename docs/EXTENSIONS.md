@@ -19,7 +19,7 @@ Read-only. Windows 10 version 1703 or later: `WSAIoctl(SIO_TCP_INFO)` returning 
 `None` and the dashboard shows a dash. The program never computes or fakes these numbers.
 
 ## 3. Transport dashboard (`transport_view.py`, `gui.TransportDashboard`)
-Host window, button "Transport Dashboard". Per Viewer: App RTT, TCP RTT, retransmitted data,
+Host window, Menu > Transport Dashboard. Per Viewer: App RTT, TCP RTT, retransmitted data,
 duplicate ACKs, congestion window, send window, bytes in flight, skipped frames. A second table
 names each TCP feature and shows the live evidence for it.
 

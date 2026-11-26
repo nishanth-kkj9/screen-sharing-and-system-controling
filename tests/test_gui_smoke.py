@@ -130,6 +130,73 @@ class GuiSmoke(unittest.TestCase):
         worker.assert_called_once()
         self.assertEqual(settings.load()["last_host"], "192.168.1.20")
 
+    def test_demo_menu_window_and_snapshot(self):
+        from screenshare import gui
+        win = self.host()
+        menu = self.root.nametowidget(self.root.cget("menu"))
+        self.assertEqual(menu.index("end"), 0)               # a single top-level button
+        self.assertEqual(menu.entrycget(0, "label"), "Menu")
+        main = menu.nametowidget(menu.entrycget(0, "menu"))
+        self.assertEqual([main.entrycget(i, "label") for i in range(main.index("end") + 1)],
+                         ["Demo", "Transport Dashboard", "Settings..."])
+        demo = main.nametowidget(main.entrycget(0, "menu"))
+        self.assertEqual(demo.entrycget(0, "label"), "Demo guide (6 steps)...")
+        win.on_demo()
+        self.assertIsNotNone(win.demo)
+        win._on_stats({"viewers": [dict(ROW, skipped=7)], "fps": 5.0, "kbps": 10.0})
+        self.assertIn("[OK]", win.demo.evidence.cget("text") + win.demo.steps.get(0))
+        win.demo._move(3)                                   # flow-control step
+        self.assertIn("skipped", win.demo.evidence.cget("text"))
+        win.copy_text("tcp.port == 5000")
+        self.assertEqual(self.root.clipboard_get(), "tcp.port == 5000")
+        path = os.path.join(self.tmp.name, "e.txt")
+        with mock.patch.object(gui.filedialog, "asksaveasfilename", return_value=path):
+            win.on_save_snapshot()
+        with open(path, encoding="utf-8") as fh:
+            self.assertIn("6. Evidence and report", fh.read())
+        win.demo.destroy()
+
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def _menus_replace_buttons(self):
+    if True:
+        from screenshare import gui
+        host = self.host()
+        texts = [w.cget("text") for w in _all_widgets(self.root) if w.winfo_class() == "TButton"]
+        self.assertNotIn("Transport Dashboard", texts)
+        self.assertNotIn("Settings...", texts)
+        hmenu = self.root.nametowidget(self.root.cget("menu"))
+        hmain = hmenu.nametowidget(hmenu.entrycget(0, "menu"))
+        self.assertEqual(hmain.entrycget(2, "label"), "Settings...")
+        host.on_dashboard()
+        self.assertTrue(host.dashboard.winfo_exists())
+        host.dashboard.destroy()
+        root2 = tk.Tk()
+        root2.withdraw()
+        try:
+            from screenshare.client import ViewerClient
+            viewer = gui.ViewerWindow(root2, lambda ev: ViewerClient(ev, "t"))
+            vmenu = root2.nametowidget(root2.cget("menu"))
+            self.assertEqual(vmenu.entrycget(0, "label"), "Menu")
+            vmain = vmenu.nametowidget(vmenu.entrycget(0, "menu"))
+            self.assertEqual(vmain.entrycget(0, "label"), "Settings...")
+            self.assertNotIn("Settings...", [w.cget("text") for w in _all_widgets(root2)
+                                              if w.winfo_class() == "TButton"])
+            viewer._alive = False
+            root2.after_cancel(viewer._after_id)
+            root2.after_cancel(viewer._frames_after_id)
+        finally:
+            root2.destroy()
+
+
+GuiSmoke.test_host_and_viewer_menus_replace_buttons = _menus_replace_buttons
+
+
+def _all_widgets(widget):
+    out = [widget]
+    for child in widget.winfo_children():
+        out.extend(_all_widgets(child))
+    return out

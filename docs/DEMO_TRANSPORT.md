@@ -2,7 +2,7 @@
 
 Run `python -m unittest discover -s tests` first. Stop any other Host first (port 5000).
 
-1. **Start**: Host: Start Sharing, then open **Transport Dashboard**. Two Viewers connect.
+1. **Start**: Host: Start Sharing, then open **Menu > Transport Dashboard** (menu bar; **Menu > Demo > Demo guide** walks the steps). Two Viewers connect.
    Say: one TCP connection per Viewer; the dashboard shows each Viewer's App RTT and TCP RTT.
 2. **Connection management** (Wireshark, filter `tcp.port == 5000`): show SYN, SYN-ACK, ACK;
    then Disconnect a Viewer and show FIN/ACK.

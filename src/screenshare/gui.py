@@ -4,10 +4,11 @@ the GUI thread; workers communicate only through queues drained by root.after().
 import queue
 import threading
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog
 
 from screenshare import client as client_mod
 from screenshare import config
+from screenshare import demo_guide
 from screenshare import settings
 from screenshare import transport_view
 from screenshare.geometry import widget_to_norm
@@ -27,6 +28,8 @@ class HostWindow:
         self.server = server_factory(self.events)
         root.title("Screen Share - Host (TCP %d)" % config.PORT)
         root.minsize(480, 420)
+        self.demo = None
+        self._build_menu()
 
         state = ttk.LabelFrame(root, text="Sharing state", padding=8)
         state.pack(fill="x", padx=10, pady=6)
@@ -45,11 +48,6 @@ class HostWindow:
         self.stop_button = ttk.Button(state, text="Stop Sharing", command=self.on_stop,
                                       state="disabled")
         self.stop_button.pack(anchor="w", pady=2)
-        extras = ttk.Frame(state)
-        extras.pack(anchor="w", pady=(4, 0))
-        ttk.Button(extras, text="Transport Dashboard",
-                   command=self.on_dashboard).pack(side="left")
-        ttk.Button(extras, text="Settings...", command=self.on_settings).pack(side="left", padx=6)
         self.dashboard = None
         self._settings_dialog = None
         self._last_stats = {"viewers": []}
@@ -147,6 +145,55 @@ class HostWindow:
         self._on_log("Settings saved: port %d, %d FPS, JPEG quality %d, up to %d Viewer(s)"
                      % (saved["port"], saved["fps"], saved["jpeg_quality"], saved["max_viewers"]))
 
+
+    # ---------- Demo menu ----------
+
+    def _build_menu(self):
+        """One 'Menu' button in the menu bar. Its dropdown lists the three areas:
+        Demo (submenu), Transport Dashboard and Settings."""
+        bar = tk.Menu(self.root)
+        main = tk.Menu(bar, tearoff=False)
+        demo = tk.Menu(main, tearoff=False)
+        demo.add_command(label="Demo guide (6 steps)...", command=self.on_demo)
+        demo.add_command(label="Save evidence snapshot...", command=self.on_save_snapshot)
+        demo.add_separator()
+        filters = tk.Menu(demo, tearoff=False)
+        for step in demo_guide.STEPS:
+            filters.add_command(label=step["title"],
+                                command=lambda f=step["filter"]: self.copy_text(f))
+        demo.add_cascade(label="Copy Wireshark filter", menu=filters)
+        main.add_cascade(label="Demo", menu=demo)
+        main.add_command(label="Transport Dashboard", command=self.on_dashboard)
+        main.add_command(label="Settings...", command=self.on_settings)
+        bar.add_cascade(label="Menu", menu=main)
+        self.root.config(menu=bar)
+
+    def copy_text(self, text):
+        self.root.clipboard_clear()
+        self.root.clipboard_append(text)
+        self._on_log("Copied to clipboard: " + text)
+
+    def on_demo(self):
+        if self.demo is not None and self.demo.winfo_exists():
+            self.demo.lift()
+            return
+        self.demo = DemoWindow(self.root, self.copy_text, self.on_save_snapshot)
+        self.demo.update_stats(self._last_stats)
+
+    def on_save_snapshot(self):
+        path = filedialog.asksaveasfilename(
+            parent=self.root, defaultextension=".txt", initialfile="transport_evidence.txt",
+            filetypes=[("Text", "*.txt")])
+        if not path:
+            return
+        try:
+            with open(path, "w", encoding="utf-8") as out:
+                out.write(demo_guide.snapshot_text(self._last_stats["viewers"]))
+        except OSError as exc:
+            messagebox.showerror("Save evidence", "Could not save: %s" % exc)
+            return
+        self._on_log("Evidence snapshot saved: " + path)
+
     def on_close(self):
         self._alive = False
         # Cancel pending timers: a callback firing after destroy() prints
@@ -210,6 +257,8 @@ class HostWindow:
         self._last_stats = data
         if self.dashboard is not None:
             self.dashboard.update_stats(data)
+        if self.demo is not None and self.demo.winfo_exists():
+            self.demo.update_stats(data)
         table = self.stats_table
         live = set()
         for row in data["viewers"]:
@@ -397,6 +446,78 @@ class TransportDashboard(tk.Toplevel):
                                   "skipped frames are still real measurements.")
 
 
+class DemoWindow(tk.Toplevel):
+    """Guided transport-layer demo: step list, what to do/say, live evidence check."""
+
+    def __init__(self, parent, copy_text, save_snapshot):
+        super().__init__(parent)
+        self.title("Demo guide - transport layer")
+        self.minsize(760, 380)
+        self._copy_text = copy_text
+        self._rows = []
+        left = ttk.Frame(self, padding=8)
+        left.pack(side="left", fill="y")
+        self.steps = tk.Listbox(left, width=44, height=10, exportselection=False)
+        for step in demo_guide.STEPS:
+            self.steps.insert("end", step["title"])
+        self.steps.pack(fill="y", expand=True)
+        self.steps.bind("<<ListboxSelect>>", lambda e: self._show())
+        right = ttk.Frame(self, padding=8)
+        right.pack(side="left", fill="both", expand=True)
+        self.title_label = ttk.Label(right, font=("TkDefaultFont", 12, "bold"))
+        self.title_label.pack(anchor="w")
+        self.do_label = ttk.Label(right, wraplength=470, justify="left")
+        self.do_label.pack(anchor="w", pady=(8, 0))
+        self.say_label = ttk.Label(right, wraplength=470, justify="left")
+        self.say_label.pack(anchor="w", pady=(8, 0))
+        self.filter_label = ttk.Label(right, wraplength=470, justify="left")
+        self.filter_label.pack(anchor="w", pady=(8, 0))
+        box = ttk.LabelFrame(right, text="Live evidence from this Host", padding=8)
+        box.pack(fill="x", pady=(10, 0))
+        self.evidence = ttk.Label(box, wraplength=450, justify="left")
+        self.evidence.pack(anchor="w")
+        row = ttk.Frame(right)
+        row.pack(anchor="w", pady=(10, 0))
+        ttk.Button(row, text="Previous", command=lambda: self._move(-1)).pack(side="left")
+        ttk.Button(row, text="Next", command=lambda: self._move(1)).pack(side="left", padx=6)
+        ttk.Button(row, text="Copy Wireshark filter",
+                   command=lambda: self._copy_text(demo_guide.STEPS[self.index()]["filter"])
+                   ).pack(side="left")
+        ttk.Button(row, text="Save evidence", command=save_snapshot).pack(side="left", padx=6)
+        self.steps.selection_set(0)
+        self._show()
+
+    def index(self):
+        selected = self.steps.curselection()
+        return selected[0] if selected else 0
+
+    def _move(self, delta):
+        i = min(max(self.index() + delta, 0), len(demo_guide.STEPS) - 1)
+        self.steps.selection_clear(0, "end")
+        self.steps.selection_set(i)
+        self._show()
+
+    def _show(self):
+        i = self.index()
+        step = demo_guide.STEPS[i]
+        self.title_label.config(text=step["title"])
+        self.do_label.config(text="Do: " + step["do"])
+        self.say_label.config(text="Say: " + step["say"])
+        self.filter_label.config(text="Wireshark filter: " + step["filter"])
+        status, text = demo_guide.evaluate(i, self._rows)
+        self.evidence.config(text="%s %s" % (demo_guide.ICON[status], text))
+        for n in range(len(demo_guide.STEPS)):
+            mark = demo_guide.ICON[demo_guide.evaluate(n, self._rows)[0]]
+            self.steps.delete(n)
+            self.steps.insert(n, "%s %s" % (mark, demo_guide.STEPS[n]["title"]))
+        self.steps.selection_clear(0, "end")
+        self.steps.selection_set(i)
+
+    def update_stats(self, data):
+        self._rows = data["viewers"]
+        self._show()
+
+
 class ScreenCanvas(ttk.Frame):
     """Aspect-ratio preserving display area (section 10.2)."""
 
@@ -469,7 +590,11 @@ class ViewerWindow:
         self.disconnect_button = ttk.Button(form, text="Disconnect", command=self.on_disconnect,
                                             state="disabled")
         self.disconnect_button.grid(row=0, column=5, padx=6)
-        ttk.Button(form, text="Settings...", command=self.on_settings).grid(row=0, column=6)
+        bar = tk.Menu(root)
+        main = tk.Menu(bar, tearoff=False)
+        main.add_command(label="Settings...", command=self.on_settings)
+        bar.add_cascade(label="Menu", menu=main)
+        root.config(menu=bar)
         self._settings_dialog = None
 
         self.state_label = ttk.Label(root, text="disconnected",
