@@ -81,3 +81,28 @@ def explainer(rows):
         ("Congestion control", "congestion window limits the sender",
          "cwnd: " + (", ".join(fmt_bytes(c) for c in cwnds) if cwnds else DASH)),
     ]
+
+
+def format_duration(seconds):
+    """125 -> '2:05', 3725 -> '1:02:05' (Connected column)."""
+    seconds = max(int(seconds), 0)
+    hours, rest = divmod(seconds, 3600)
+    minutes, secs = divmod(rest, 60)
+    return "%d:%02d:%02d" % (hours, minutes, secs) if hours else "%d:%02d" % (minutes, secs)
+
+
+def host_header(sharing, viewers, pending, active):
+    """(kind, headline, hint) for the status header. Pure, so it is unit-tested."""
+    if not sharing:
+        return "idle", "Not sharing", "Press Start Sharing to share this screen."
+    if active:
+        return "control", "%s is controlling this PC" % active, \
+            "Press Revoke Control to take it back at any time."
+    if pending:
+        return "request", "Control request from %s" % pending, \
+            "Press Approve to allow it or Deny to refuse."
+    if viewers:
+        return "sharing", "Sharing with %d Viewer%s" % (viewers, "" if viewers == 1 else "s"), \
+            "Viewers watch only. A Viewer must ask for control and you approve it."
+    return "sharing", "Sharing - waiting for Viewers", \
+        "Give a Viewer the address and session code below."

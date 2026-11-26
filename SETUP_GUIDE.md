@@ -98,9 +98,10 @@ The window titles tell the roles apart:
 ## 4. Host laptop (share the screen)
 
 1. Click **Start Sharing**.
-   The panel changes to `listening`, shows `TCP port 5000 - listening on all
-   interfaces`, a list of this laptop's IPv4 addresses, and a fresh
-   **session code**. The code is 8 characters from an alphabet without
+   The header turns green and reads `Sharing - waiting for Viewers`. The
+   **Connect a Viewer** box shows `TCP port 5000 - listening on all
+   interfaces`, a list of this laptop's IPv4 addresses with a **Copy** button,
+   and a fresh **session code** in large type with its own **Copy** button. The code is 8 characters from an alphabet without
    `I`, `O`, `0` and `1` (to avoid misreading), and a **new code is generated
    every time sharing starts**.
 2. Read the IPv4 address from the drop-down list (see section 5). Selecting an
@@ -108,14 +109,16 @@ The window titles tell the roles apart:
 3. When a Viewer asks for control, **Approve** or **Deny** it. The label
    `Controller: <name>` shows who is in control; **Revoke Control** takes it back
    immediately and releases any keys or buttons still held.
-4. The **Viewer statistics** table shows each Viewer: name, peer `ip:port`,
-   connected seconds, frames, bytes, and skipped frames (frames replaced in the
+4. The **Connected Viewers** table shows each Viewer: name, **Control**
+   (`View only` or `Controlling`), peer `ip:port`, connected time (`m:ss`),
+   frames, data (B / KB / MB) and skipped frames (frames replaced in the
    one-item queue before they were sent). Below it: total FPS and KB/s.
-   Select a row and click **Disconnect Viewer** to drop a stuck client.
+   **Disconnect Viewer** is enabled once a row is selected; use it to drop a
+   stuck client.
 5. **Stop Sharing** closes the listener, ends every Viewer session, releases all
    held remote input, and clears the session code.
 
-The log box at the bottom records the important events: sharing started, a
+The **Activity** box at the bottom records the important events, each with a time: sharing started, a
 connection waiting for JOIN, a Viewer connected, control granted, disconnects.
 
 ---
@@ -349,7 +352,7 @@ full session (handshake → JOIN/JPEG data → control grant → revoke → FIN)
 | Viewer returns to `disconnected` after Connect | the JOIN was denied or the code was wrong; each attempt is a new connection | enter the current code and click **Connect** again |
 | "The Host already has two Viewers." | two Viewers already connected | close one Viewer |
 | "The Host speaks a different protocol version." | different project versions | use the same code on both laptops |
-| Viewer stays `view-only`, no image | Host not sharing, or capture failing | check the Host log box; stop and restart sharing |
+| Viewer stays `view-only`, no image | Host not sharing, or capture failing | check the Host Activity box; stop and restart sharing |
 | Remote input does nothing | not `controlling`, allowlist key, or UAC/lock screen | check the state label; only allowlisted keys are forwarded; UAC prompts cannot be controlled |
 | Control stops by itself, Host warns about the fail-safe | Host's physical mouse was moved into a screen corner | move the mouse away; request control again |
 | Remote cursor is offset from the real one | display scaling differs between laptops | the app sets per-monitor DPI awareness; 125% has been verified, other values should be checked on the real Host |

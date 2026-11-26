@@ -3,8 +3,10 @@
 the GUI thread; workers communicate only through queues drained by root.after()."""
 import queue
 import threading
+import time
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
+from tkinter import font as tkfont
 
 from screenshare import client as client_mod
 from screenshare import config
@@ -18,6 +20,11 @@ from PIL import ImageTk
 POLL_MS = 50          # GUI queue polling interval (section 7.1)
 GUI_POLL_MS = 40      # decoded-frame polling (slightly faster than the event queue)
 
+# Host window look. Colours only supplement text: every state is also written out.
+STATE_COLORS = {"idle": "#8a8f98", "sharing": "#2e9e4f", "request": "#d98e04",
+                "control": "#2563eb"}
+ALERT_BG, ALERT_FG = "#fff4ce", "#4d3b00"     # pending control request panel
+
 
 class HostWindow:
     """Host controls (section 10.1)."""
@@ -26,74 +33,152 @@ class HostWindow:
         self.root = root
         self.events = queue.Queue()
         self.server = server_factory(self.events)
-        root.title("Screen Share - Host (TCP %d)" % config.PORT)
-        root.minsize(700, 560)
+        root.title(self._title())
+        root.minsize(780, 650)
         self.demo = None
         self._build_menu()
-
-        state = ttk.LabelFrame(root, text="Sharing state", padding=8)
-        state.pack(fill="x", padx=10, pady=6)
-        self.state_label = ttk.Label(state, text="stopped", font=("TkDefaultFont", 11, "bold"))
-        self.state_label.pack(anchor="w")
-        self.addr_label = ttk.Label(state, text="Address: (not sharing)")
-        self.addr_label.pack(anchor="w")
-        # Section 3.3: show every candidate IPv4 (virtual adapters appear too) and
-        # let the student correct the best guess. The Host binds 0.0.0.0 regardless.
-        self.ip_box = ttk.Combobox(state, width=24)
-        self.ip_box.pack(anchor="w", pady=(2, 0))
-        self.code_label = ttk.Label(state, text="Session code: (not sharing)")
-        self.code_label.pack(anchor="w")
-        self.start_button = ttk.Button(state, text="Start Sharing", command=self.on_start)
-        self.start_button.pack(anchor="w", pady=(6, 0))
-        self.stop_button = ttk.Button(state, text="Stop Sharing", command=self.on_stop,
-                                      state="disabled")
-        self.stop_button.pack(anchor="w", pady=2)
         self.dashboard = None
         self._settings_dialog = None
         self._last_stats = {"viewers": []}
+        self._sharing = False
+        self._pending = None
+        self._active = None
 
-        viewers = ttk.LabelFrame(root, text="Viewer statistics", padding=8)
-        viewers.pack(fill="both", expand=True, padx=10, pady=6)
-        columns = ("peer", "time", "frames", "bytes", "skipped")
-        self.stats_table = ttk.Treeview(viewers, columns=columns, height=4)
-        self.stats_table.heading("#0", text="Viewer")
-        self.stats_table.column("#0", width=190, anchor="w")
-        for column, title, width in (("peer", "Peer ip:port", 150), ("time", "Connected", 80),
-                                     ("frames", "Frames", 70), ("bytes", "Bytes", 90),
-                                     ("skipped", "Skipped", 70)):
-            self.stats_table.heading(column, text=title)
-            self.stats_table.column(column, width=width, anchor="e")
-        self.stats_table.pack(fill="both", expand=True)
-        self.totals_label = ttk.Label(viewers, text="Total: 0.0 FPS, 0.0 KB/s")
-        self.totals_label.pack(anchor="w", pady=(4, 0))
-        self.disconnect_viewer_button = ttk.Button(
-            viewers, text="Disconnect Viewer", command=self.on_disconnect_viewer,
-            state="disabled")
-        self.disconnect_viewer_button.pack(anchor="w", pady=(4, 0))
+        style = ttk.Style(root)
+        base = tkfont.nametofont("TkDefaultFont")
+        size = abs(int(base.actual("size"))) or 9
+        self._fonts = {
+            "title": tkfont.Font(root=root, family=base.actual("family"), size=size + 4,
+                                 weight="bold"),
+            "code": tkfont.Font(root=root, family=tkfont.nametofont("TkFixedFont").actual("family"),
+                                size=size + 5, weight="bold"),
+            "bold": tkfont.Font(root=root, family=base.actual("family"), size=size,
+                                weight="bold"),
+        }
+        line = tkfont.Font(root=root, font=base).metrics("linespace")
+        style.configure("Host.Treeview", rowheight=line + 8)
+        style.configure("Host.Treeview.Heading", font=self._fonts["bold"])
+        self._bg = style.lookup("TFrame", "background") or root.cget("background")
+        root.columnconfigure(0, weight=1)
+        root.rowconfigure(2, weight=3)
+        root.rowconfigure(4, weight=1)
+        pad = {"padx": 10, "pady": (8, 0)}
 
-        control = ttk.LabelFrame(root, text="Remote control", padding=8)
-        control.pack(fill="x", padx=10, pady=6)
-        self.request_label = ttk.Label(control, text="No pending control request.")
-        self.request_label.pack(anchor="w")
-        self.approve_button = ttk.Button(control, text="Approve", command=self.on_approve,
-                                         state="disabled")
-        self.approve_button.pack(side="left", pady=(6, 0))
-        self.deny_button = ttk.Button(control, text="Deny", command=self.on_deny,
+        # 1. Status header: what is happening, and the one primary action.
+        header = ttk.Frame(root, padding=(2, 0))
+        header.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 0))
+        header.columnconfigure(1, weight=1)
+        self.state_dot = tk.Canvas(header, width=20, height=20, highlightthickness=0,
+                                   bg=self._bg)
+        self._dot = self.state_dot.create_oval(3, 3, 17, 17, fill=STATE_COLORS["idle"],
+                                               outline="")
+        self.state_dot.grid(row=0, column=0, rowspan=2, padx=(0, 8))
+        self.state_label = ttk.Label(header, text="Not sharing", font=self._fonts["title"])
+        self.state_label.grid(row=0, column=1, sticky="w")
+        self.hint_label = ttk.Label(header, text="", foreground="#555555")
+        self.hint_label.grid(row=1, column=1, sticky="w")
+        actions = ttk.Frame(header)
+        actions.grid(row=0, column=2, rowspan=2, sticky="e")
+        self.start_button = ttk.Button(actions, text="Start Sharing", command=self.on_start)
+        self.start_button.pack(side="left")
+        self.stop_button = ttk.Button(actions, text="Stop Sharing", command=self.on_stop,
                                       state="disabled")
-        self.deny_button.pack(side="left", padx=6, pady=(6, 0))
-        self.controller_label = ttk.Label(control, text="Controller: none")
-        self.controller_label.pack(anchor="w", pady=(6, 0))
-        self.revoke_button = ttk.Button(control, text="Revoke Control",
-                                        command=self.on_revoke, state="disabled")
-        self.revoke_button.pack(anchor="w", pady=2)
+        self.stop_button.pack(side="left", padx=(6, 0))
 
-        self.log_text = tk.Text(root, height=6, state="disabled", wrap="word")
-        self.log_text.pack(fill="both", padx=10, pady=(6, 10))
+        # 2. Connection details a Viewer needs (address + code), each with Copy.
+        connect = ttk.LabelFrame(root, text="Connect a Viewer", padding=8)
+        connect.grid(row=1, column=0, sticky="ew", **pad)
+        connect.columnconfigure(3, weight=1)
+        ttk.Label(connect, text="Host address").grid(row=0, column=0, sticky="w")
+        # Section 3.3: show every candidate IPv4 (virtual adapters appear too) and
+        # let the student correct the best guess. The Host binds 0.0.0.0 regardless.
+        self.ip_box = ttk.Combobox(connect, width=24)
+        self.ip_box.grid(row=0, column=1, sticky="w", padx=8)
+        self.copy_address_button = ttk.Button(connect, text="Copy", width=7,
+                                              command=self.on_copy_address, state="disabled")
+        self.copy_address_button.grid(row=0, column=2)
+        ttk.Label(connect, text="Session code").grid(row=1, column=0, sticky="w", pady=(6, 0))
+        self.code_label = ttk.Label(connect, text="not sharing", foreground="#555555")
+        self.code_label.grid(row=1, column=1, sticky="w", padx=8, pady=(6, 0))
+        self.copy_code_button = ttk.Button(connect, text="Copy", width=7,
+                                           command=self.on_copy_code, state="disabled")
+        self.copy_code_button.grid(row=1, column=2, pady=(6, 0))
+        self.addr_label = ttk.Label(connect, text="Address: (not sharing)", foreground="#555555")
+        self.addr_label.grid(row=2, column=0, columnspan=3, sticky="w", pady=(6, 0))
+
+        # 3. Connected Viewers.
+        viewers = ttk.LabelFrame(root, text="Connected Viewers", padding=8)
+        viewers.grid(row=2, column=0, sticky="nsew", **pad)
+        viewers.columnconfigure(0, weight=1)
+        viewers.rowconfigure(0, weight=1)
+        columns = ("control", "peer", "time", "frames", "bytes", "skipped")
+        self.stats_table = ttk.Treeview(viewers, columns=columns, height=4,
+                                        selectmode="browse", style="Host.Treeview")
+        self.stats_table.heading("#0", text="Viewer")
+        self.stats_table.column("#0", width=170, anchor="w", stretch=True)
+        for column, title, width in (("control", "Control", 90), ("peer", "Address", 150),
+                                     ("time", "Connected", 80), ("frames", "Frames", 70),
+                                     ("bytes", "Data", 80), ("skipped", "Skipped", 70)):
+            self.stats_table.heading(column, text=title)
+            self.stats_table.column(column, width=width, anchor="w" if column == "control" else "e",
+                                    stretch=column in ("peer",))
+        self.stats_table.grid(row=0, column=0, sticky="nsew")
+        self.stats_table.bind("<<TreeviewSelect>>", lambda e: self._update_disconnect_state())
+        foot = ttk.Frame(viewers)
+        foot.grid(row=1, column=0, sticky="ew", pady=(6, 0))
+        foot.columnconfigure(0, weight=1)
+        self.totals_label = ttk.Label(foot, text="Total: 0.0 FPS, 0.0 KB/s")
+        self.totals_label.grid(row=0, column=0, sticky="w")
+        self.disconnect_viewer_button = ttk.Button(
+            foot, text="Disconnect Viewer", command=self.on_disconnect_viewer, state="disabled")
+        self.disconnect_viewer_button.grid(row=0, column=1, sticky="e")
+
+        # 4. Remote control: the request is an alert panel, the controller is a status row.
+        control = ttk.LabelFrame(root, text="Remote control", padding=8)
+        control.grid(row=3, column=0, sticky="ew", **pad)
+        control.columnconfigure(0, weight=1)
+        self.request_panel = tk.Frame(control, bg=self._bg, padx=6, pady=6)
+        self.request_panel.grid(row=0, column=0, sticky="ew")
+        self.request_panel.columnconfigure(0, weight=1)
+        self.request_label = tk.Label(self.request_panel, text="No pending control request.",
+                                      bg=self._bg, anchor="w")
+        self.request_label.grid(row=0, column=0, sticky="w")
+        self.approve_button = ttk.Button(self.request_panel, text="Approve",
+                                         command=self.on_approve, state="disabled")
+        self.approve_button.grid(row=0, column=1, padx=(8, 0))
+        self.deny_button = ttk.Button(self.request_panel, text="Deny", command=self.on_deny,
+                                      state="disabled")
+        self.deny_button.grid(row=0, column=2, padx=(6, 0))
+        who = ttk.Frame(control)
+        who.grid(row=1, column=0, sticky="ew", pady=(6, 0))
+        who.columnconfigure(0, weight=1)
+        self.controller_label = ttk.Label(who, text="Controller: none")
+        self.controller_label.grid(row=0, column=0, sticky="w", padx=6)
+        self.revoke_button = ttk.Button(who, text="Revoke Control", command=self.on_revoke,
+                                        state="disabled")
+        self.revoke_button.grid(row=0, column=1, sticky="e")
+
+        # 5. Activity log (timestamped, scrollable).
+        activity = ttk.LabelFrame(root, text="Activity", padding=8)
+        activity.grid(row=4, column=0, sticky="nsew", padx=10, pady=(8, 10))
+        activity.columnconfigure(0, weight=1)
+        activity.rowconfigure(0, weight=1)
+        self.log_text = tk.Text(activity, height=6, state="disabled", wrap="word")
+        self.log_text.tag_configure("time", foreground="#6b7280")
+        scroll = ttk.Scrollbar(activity, orient="vertical", command=self.log_text.yview)
+        self.log_text.configure(yscrollcommand=scroll.set)
+        self.log_text.grid(row=0, column=0, sticky="nsew")
+        scroll.grid(row=0, column=1, sticky="ns")
 
         root.protocol("WM_DELETE_WINDOW", self.on_close)
         self._alive = True
         self._after_id = None
+        self._refresh_header()
         self._poll()
+
+    @staticmethod
+    def _title():
+        return "Screen Share - Host (TCP %d)" % config.PORT
 
     # ---------- GUI-thread actions ----------
 
@@ -119,6 +204,16 @@ class HostWindow:
         if selected:
             self.server.disconnect_viewer(selected[0])
 
+    def on_copy_address(self):
+        value = self.ip_box.get().strip()
+        if value:
+            self.copy_text(value, "Host address copied")
+
+    def on_copy_code(self):
+        code = self.code_label.cget("text")
+        if self._sharing and code:
+            self.copy_text(code, "Session code copied")
+
     def on_dashboard(self):
         if self.dashboard is not None and self.dashboard.winfo_exists():
             self.dashboard.lift()
@@ -141,7 +236,7 @@ class HostWindow:
 
     def _settings_saved(self, saved):
         settings.apply(saved, config)
-        self.root.title("Screen Share - Host (TCP %d)" % config.PORT)
+        self.root.title(self._title())
         self._on_log("Settings saved: port %d, %d FPS, JPEG quality %d, up to %d Viewer(s)"
                      % (saved["port"], saved["fps"], saved["jpeg_quality"], saved["max_viewers"]))
 
@@ -168,10 +263,12 @@ class HostWindow:
         bar.add_cascade(label="Menu", menu=main)
         self.root.config(menu=bar)
 
-    def copy_text(self, text):
+    def copy_text(self, text, message=None):
+        """Copy to the clipboard. `message` replaces the log line (the session code
+        is not written into the log)."""
         self.root.clipboard_clear()
         self.root.clipboard_append(text)
-        self._on_log("Copied to clipboard: " + text)
+        self._on_log(message or "Copied to clipboard: " + text)
 
     def on_demo(self):
         if self.demo is not None and self.demo.winfo_exists():
@@ -223,33 +320,71 @@ class HostWindow:
         self.start_button.config(state="disabled" if listening else "normal")
         self.stop_button.config(state="normal" if listening else "disabled")
 
+    def _refresh_header(self):
+        kind, headline, hint = transport_view.host_header(self._sharing, len(self.stats_table.get_children()),
+                                           self._pending, self._active)
+        self.state_label.config(text=headline)
+        self.hint_label.config(text=hint)
+        self.state_dot.itemconfigure(self._dot, fill=STATE_COLORS[kind])
+
+    def _update_disconnect_state(self):
+        enabled = bool(self.stats_table.selection())
+        self.disconnect_viewer_button.config(state="normal" if enabled else "disabled")
+
+    def _show_request(self, pending):
+        """Pending request = amber alert panel; otherwise the panel is plain."""
+        self._pending = pending
+        bg, fg = (ALERT_BG, ALERT_FG) if pending else (self._bg, "black")
+        self.request_panel.config(bg=bg)
+        self.request_label.config(
+            bg=bg, fg=fg, font=self._fonts["bold"] if pending else "TkDefaultFont",
+            text="Pending request from: %s" % pending if pending
+            else "No pending control request.")
+        state = "normal" if pending else "disabled"
+        self.approve_button.config(state=state)
+        self.deny_button.config(state=state)
+
+    def _mark_controller(self, active):
+        self._active = active
+        self.controller_label.config(text="Controller: %s" % active if active
+                                     else "Controller: none")
+        self.revoke_button.config(state="normal" if active else "disabled")
+        for iid in self.stats_table.get_children():
+            name = self.stats_table.item(iid, "text")
+            self.stats_table.set(iid, "control", "Controlling" if active and name == active
+                                 else "View only")
+
     def _on_started(self, data):
-        self.state_label.config(text="listening")
+        self._sharing = True
         self.addr_label.config(text="TCP port %d - listening on all interfaces" % data["port"])
         candidates = data.get("ips") or [data["ip"]]
         self.ip_box.config(values=candidates)
         self.ip_box.set(data["ip"])
-        self.code_label.config(text="Session code: %s" % data["code"])
+        self.code_label.config(text=data["code"], font=self._fonts["code"], foreground="black")
+        self.copy_address_button.config(state="normal")
+        self.copy_code_button.config(state="normal")
         self._set_buttons()
+        self._refresh_header()
 
     def _on_stopped(self, data):
-        self.state_label.config(text="stopped")
+        self._sharing = False
         self.addr_label.config(text="Address: (not sharing)")
         self.ip_box.set("")
         self.ip_box.config(values=[])
-        self.code_label.config(text="Session code: (not sharing)")
+        self.code_label.config(text="not sharing", font="TkDefaultFont", foreground="#555555")
+        self.copy_address_button.config(state="disabled")
+        self.copy_code_button.config(state="disabled")
         self.stats_table.delete(*self.stats_table.get_children())
         self.totals_label.config(text="Total: 0.0 FPS, 0.0 KB/s")
-        self.disconnect_viewer_button.config(state="disabled")
+        self._update_disconnect_state()
         self._last_stats = {"viewers": []}
         if self.dashboard is not None:
             self.dashboard.update_stats(self._last_stats)
-        self.request_label.config(text="No pending control request.")
-        self.controller_label.config(text="Controller: none")
-        self.approve_button.config(state="disabled")
-        self.deny_button.config(state="disabled")
-        self.revoke_button.config(state="disabled")
+        self._show_request(None)
+        self._mark_controller(None)
         self._set_buttons()
+        self._refresh_header()
+        self._on_log("Sharing stopped")
 
     def _on_stats(self, data):
         """Per-Viewer counters and totals (sections 10.1 and 25.3). Rows are updated
@@ -263,8 +398,9 @@ class HostWindow:
         live = set()
         for row in data["viewers"]:
             live.add(row["id"])
-            values = (row["peer"], "%.0f s" % row["seconds"], row["frames"],
-                      row["bytes"], row["skipped"])
+            control = "Controlling" if self._active and row["name"] == self._active else "View only"
+            values = (control, row["peer"], transport_view.format_duration(row["seconds"]), row["frames"],
+                      transport_view.fmt_bytes(row["bytes"]), row["skipped"])
             if table.exists(row["id"]):
                 table.item(row["id"], text=row["name"], values=values)
             else:
@@ -273,42 +409,33 @@ class HostWindow:
             if iid not in live:
                 table.delete(iid)
         self.totals_label.config(text="Total: %.1f FPS, %.1f KB/s" % (data["fps"], data["kbps"]))
-        self.disconnect_viewer_button.config(state="normal" if live else "disabled")
+        self._update_disconnect_state()
+        self._refresh_header()
 
     def _on_status(self, data):
         status = data["status"]
-        pending = status.get("pending_requester")
-        active = status.get("active_controller")
-        if pending:
-            self.request_label.config(text="Pending request from: %s" % pending)
-            self.approve_button.config(state="normal")
-            self.deny_button.config(state="normal")
-        else:
-            self.request_label.config(text="No pending control request.")
-            self.approve_button.config(state="disabled")
-            self.deny_button.config(state="disabled")
-        if active:
-            self.controller_label.config(text="Controller: %s" % active)
-            self.revoke_button.config(state="normal")
-        else:
-            self.controller_label.config(text="Controller: none")
-            self.revoke_button.config(state="disabled")
+        self._show_request(status.get("pending_requester"))
+        self._mark_controller(status.get("active_controller"))
+        self._refresh_header()
 
     def _on_control_request(self, name):
-        # Status broadcast arrives right behind it; the label update is instant.
-        self.request_label.config(text="Pending request from: %s" % name)
-        self.approve_button.config(state="normal")
-        self.deny_button.config(state="normal")
+        # Status broadcast arrives right behind it; the panel update is instant.
+        self._show_request(name)
+        self._refresh_header()
+        self._on_log("Control request from %s" % name)
         self.root.bell()
 
     def _on_warning(self, text):
         messagebox.showwarning("Host", text)
 
     def _on_log(self, text):
+        stamp = time.strftime("%H:%M:%S")
         self.log_text.config(state="normal")
+        self.log_text.insert("end", stamp + "  ", "time")
         self.log_text.insert("end", text + "\n")
         self.log_text.see("end")
         self.log_text.config(state="disabled")
+
 
 class SettingsDialog(tk.Toplevel):
     """Edit and save settings. `fields` is a list of (key, label, hint). Values are
