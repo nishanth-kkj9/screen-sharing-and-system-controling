@@ -5,3 +5,6 @@ build/
 dist/
 *.egg-info/
 .serena/
+# Wireshark captures are hundreds of MB and are never committed
+*.pcap
+*.pcapng
