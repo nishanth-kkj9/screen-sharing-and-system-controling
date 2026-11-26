@@ -16,7 +16,8 @@ def viewer(viewer_id, now, frames, byte_count):
     return types.SimpleNamespace(
         id=viewer_id, display=viewer_id, addr=("127.0.0.1", 40000),
         authenticated=True, connected_at=now - 2.0,
-        frames_sent=frames, bytes_sent=byte_count, frames_skipped=0)
+        frames_sent=frames, bytes_sent=byte_count, frames_skipped=0,
+        sock=None, rtt_ms=None)
 
 
 class StatsRatesNeverNegative(unittest.TestCase):

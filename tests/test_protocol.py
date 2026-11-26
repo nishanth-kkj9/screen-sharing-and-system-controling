@@ -54,7 +54,7 @@ class Directions(unittest.TestCase):
             "screen_height": 720, "fps": 5, "reason": "host_revoked",
             "viewer_count": 2, "active_controller": None, "pending_requester": None,
             "x": 0.5, "y": 0.5, "button": "left", "action": "down", "amount": 1,
-            "key": "enter",
+            "key": "enter", "id": 7,
         }
         return {name: sample[name] for name, _types in P.REQUIRED_FIELDS.get(mtype, ())}
 

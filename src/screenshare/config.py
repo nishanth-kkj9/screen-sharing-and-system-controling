@@ -21,6 +21,8 @@ JPEG_QUALITY = 65
 MAX_BAD_SESSION_CODES = 3          # per TCP connection
 MAX_CONTROL_QUEUE_ITEMS = 128      # messages per connection
 JOIN_TIMEOUT = 10.0                # seconds until JOIN_ACCEPT is sent (section 0.3 C9)
+PING_INTERVAL = 1.0                # Host -> Viewer PING period (extension, docs/EXTENSIONS.md)
+PING_TIMEOUT = 5.0                 # an unanswered PING is forgotten after this long
 
 SESSION_CODE_LENGTH = 8
 SESSION_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"

@@ -14,6 +14,7 @@ import time
 from screenshare import config
 from screenshare import protocol
 from screenshare import screen_capture
+from screenshare import tcpstats
 from screenshare.outbox import Outbox
 from screenshare.permissions import PermissionManager
 from screenshare.remote_input import RemoteInput
@@ -48,6 +49,15 @@ class ViewerSession:
         self._close_lock = threading.Lock()
         self._closed = False
         self._cleaned = False
+        # Application-level round trip (extension, docs/EXTENSIONS.md). Only Viewers
+        # that announced "ping" in JOIN are pinged; the PONG arrives on the reader
+        # thread while the capture thread sends, hence the small lock.
+        self.features = frozenset()
+        self.rtt_ms = None
+        self._ping_lock = threading.Lock()
+        self._ping_id = 0
+        self._ping_sent = None             # (id, monotonic time) of the unanswered PING
+        self._last_ping = 0.0
 
     @property
     def alive(self):
@@ -68,6 +78,26 @@ class ViewerSession:
         (section 7.4: never drop a permission or input transition silently)."""
         return self.outbox.put_control(protocol.encode_json_message(message_dict))
 
+    def make_ping(self, now):
+        """The next PING message when one is due, else None."""
+        with self._ping_lock:
+            if "ping" not in self.features:
+                return None
+            if self._ping_sent is not None and now - self._ping_sent[1] < config.PING_TIMEOUT:
+                return None                # still waiting for the previous PONG
+            if now - self._last_ping < config.PING_INTERVAL:
+                return None
+            self._ping_id += 1
+            self._ping_sent = (self._ping_id, now)
+            self._last_ping = now
+            return {"type": "PING", "id": self._ping_id}
+
+    def on_pong(self, ping_id, now):
+        with self._ping_lock:
+            if self._ping_sent is not None and self._ping_sent[0] == ping_id:
+                self.rtt_ms = (now - self._ping_sent[1]) * 1000.0
+                self._ping_sent = None
+
     def mark_cleaned(self):
         with self._close_lock:
             if self._cleaned:
@@ -85,8 +115,9 @@ class ViewerSession:
             self._closed = True
         self.stop_event.set()
         self.outbox.close()
-        if self.writer_thread is not None and self.writer_thread is not threading.current_thread():
-            self.writer_thread.join(timeout=1.0)
+        writer = self.writer_thread
+        if writer is not None and writer is not threading.current_thread() and writer.is_alive():
+            writer.join(timeout=1.0)
         try:
             self.sock.shutdown(socket.SHUT_WR)      # FIN after the queued bytes
         except OSError:
@@ -239,7 +270,8 @@ class HostServer:
             joinable.extend(t for t in (session.reader_thread, session.writer_thread) if t)
             session.close()
         for thread in joinable:
-            thread.join(timeout=1.0)          # bounded waits only (section 11.3)
+            if thread.is_alive():
+                thread.join(timeout=1.0)          # bounded waits only (section 11.3)
         self.remote_input.release_all()        # never leave input held (section 9.5)
         self.perm.reset()
         with self._sessions_lock:
@@ -314,6 +346,8 @@ class HostServer:
                 "frames": session.frames_sent,
                 "bytes": session.bytes_sent,
                 "skipped": session.frames_skipped,
+                "rtt_ms": session.rtt_ms,                  # application PING/PONG
+                "tcp": tcpstats.read(session.sock),        # kernel counters or None
             })
             frames += session.frames_sent
             bytes_ += session.bytes_sent
@@ -370,8 +404,9 @@ class HostServer:
                 target=self._reader_loop, args=(session,), name="reader-" + session.id, daemon=True)
             session.writer_thread = threading.Thread(
                 target=self._writer_loop, args=(session,), name="writer-" + session.id, daemon=True)
-            session.reader_thread.start()
+            # Writer first: the reader may deny the JOIN at once and close() waits on it.
             session.writer_thread.start()
+            session.reader_thread.start()
             self._emit("log", "Connection from %s:%s waiting for JOIN" % addr)
 
     def _deny_connection(self, sock, addr):
@@ -492,6 +527,9 @@ class HostServer:
                 return False
             # Authenticated.
             session.name = name
+            offered = msg.get("features")
+            if isinstance(offered, list):
+                session.features = frozenset(f for f in offered[:8] if isinstance(f, str))
             session.sock.settimeout(None)      # C9: after JOIN_ACCEPT
             if self._last_frame_size is None:
                 self._probe_frame()
@@ -527,6 +565,9 @@ class HostServer:
             return False
         if mtype == "DISCONNECT":
             return False
+        if mtype == "PONG":
+            session.on_pong(msg["id"], time.monotonic())
+            return True
         if mtype == "CONTROL_REQUEST":
             decision, reason = self.perm.request(session.id)
             if decision == "deny":
@@ -574,6 +615,7 @@ class HostServer:
                     time.sleep(0.2)            # idle while nobody watches (6.1)
                     continue
                 pacer.wait()
+                self._send_pings()
                 try:
                     result = source()
                 except Exception:
@@ -620,6 +662,15 @@ class HostServer:
         except Exception as exc:
             logger.warning("initial frame probe failed", exc_info=True)
             return str(exc) or type(exc).__name__
+
+    def _send_pings(self):
+        now = time.monotonic()
+        with self._sessions_lock:
+            sessions = [s for s in self._sessions.values() if s.authenticated]
+        for session in sessions:
+            message = session.make_ping(now)
+            if message is not None:
+                self._send(session, message)
 
     def _any_authenticated(self):
         with self._sessions_lock:

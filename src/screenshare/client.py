@@ -25,7 +25,7 @@ REQUEST_PENDING = "request_pending"
 CONTROLLING = "controlling"
 
 HOST_TO_VIEWER_TYPES = {"JOIN_ACCEPT", "JOIN_DENIED", "STATUS", "CONTROL_GRANTED",
-                        "CONTROL_DENIED", "CONTROL_REVOKED", "ERROR", "DISCONNECT"}
+                        "CONTROL_DENIED", "CONTROL_REVOKED", "ERROR", "DISCONNECT", "PING"}
 
 
 class ViewerClient:
@@ -101,7 +101,8 @@ class ViewerClient:
         reader.start()
         writer.start()
         self._enqueue({"type": "JOIN", "protocol_version": config.PROTOCOL_VERSION,
-                      "client_name": self.name, "session_code": session_code})
+                      "client_name": self.name, "session_code": session_code,
+                      "features": ["ping"]})   # extension: Host may send PING
         self._emit("state", self.state)
 
     def disconnect(self, graceful=True):
@@ -248,6 +249,11 @@ class ViewerClient:
             return False                      # the user clicks Connect again to retry
         if mtype == "STATUS":
             self._emit("status", msg)
+            return True
+        if mtype == "PING":
+            ping_id = msg.get("id")
+            if isinstance(ping_id, int) and not isinstance(ping_id, bool):
+                self._enqueue({"type": "PONG", "id": ping_id})
             return True
         if mtype == "CONTROL_GRANTED":
             # A cancel can cross a grant on the wire. Only a Viewer that is still

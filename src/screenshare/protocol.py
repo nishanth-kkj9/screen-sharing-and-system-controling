@@ -93,10 +93,10 @@ ERROR_REASONS = frozenset({"unsupported_message", "invalid_input"})
 
 VIEWER_TO_HOST_TYPES = frozenset({
     "JOIN", "CONTROL_REQUEST", "CONTROL_RELEASE", "MOUSE_MOVE", "MOUSE_BUTTON",
-    "SCROLL", "KEY_DOWN", "KEY_UP", "DISCONNECT"})
+    "SCROLL", "KEY_DOWN", "KEY_UP", "DISCONNECT", "PONG"})
 HOST_TO_VIEWER_TYPES = frozenset({
     "JOIN_ACCEPT", "JOIN_DENIED", "STATUS", "CONTROL_GRANTED", "CONTROL_DENIED",
-    "CONTROL_REVOKED", "DISCONNECT", "ERROR"})
+    "CONTROL_REVOKED", "DISCONNECT", "ERROR", "PING"})
 
 _STR = (str,)
 _INT = (int,)
@@ -119,6 +119,8 @@ REQUIRED_FIELDS = {
     "KEY_DOWN": (("key", _STR),),
     "KEY_UP": (("key", _STR),),
     "ERROR": (("reason", _STR),),
+    "PING": (("id", _INT),),            # extension: docs/EXTENSIONS.md
+    "PONG": (("id", _INT),),
 }
 
 

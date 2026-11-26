@@ -88,6 +88,15 @@ The application is started with `screenshare host` on the sharing laptop and
   compared with `secrets.compare_digest`. It is plaintext on the wire — a convenience
   gate for a trusted LAN, not real security.
 
+## Transport dashboard, settings and tools
+
+The Host window has a **Transport Dashboard** (per-Viewer App RTT, kernel TCP RTT,
+retransmissions, duplicate ACKs, congestion and send windows, skipped frames, and a
+table matching each TCP feature to its live evidence) and **Settings...** (port, FPS,
+JPEG quality, screen size, Viewer limit; Viewers can also set a name and a
+slow-Viewer delay). `tools/pcap_report.py` summarises a Wireshark capture. These are
+extensions to the specification; see `docs/EXTENSIONS.md` and `docs/DEMO_TRANSPORT.md`.
+
 ## Known limitations
 
 - 5 FPS JPEG updates; a much slower Viewer can display older frames (accepted
