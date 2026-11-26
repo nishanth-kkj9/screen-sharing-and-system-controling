@@ -2,15 +2,11 @@
 
 Marked on the application working (5) and a live demonstration (5). A smaller design that works every time beats a larger one that fails once.
 
-## Mode: extension (student-approved, overrides rule 2 below ONLY for what `EXTENSION_GUIDE.md` lists)
-The student explicitly approved PING/PONG, kernel TCP statistics, the Transport dashboard, Settings and `tools/`. Follow `EXTENSION_GUIDE.md` step by step. Anything not listed there is still forbidden. Record the additions in `docs/EXTENSIONS.md`; never edit `ARCHITECTURE_FINAL_v5.md`. Runtime dependencies stay `mss`, `Pillow`, `PyAutoGUI` (Scapy is only for `tools/`).
-
-## Mode: fix and verify (the application already exists)
-1. Read `REQUIREMENTS_FOR_AGENT.md`, then `AGENT_FIX_GUIDE.md`. Apply the patch and tests exactly as written; if anything does not apply or a test result differs from what the guide states, stop and report it. Do not improvise a different fix.
-2. `ARCHITECTURE_FINAL_v5.md` is the spec of record and read-only. If it is wrong or silent on something that matters, stop and ask the student. Never invent a protocol, port, dependency or feature.
-3. Fixed facts: TCP port 5000, one connection per Viewer, max 2 Viewers, 5-byte header `!BI`, type 1 JSON / 2 JPEG, runtime packages `mss`, `Pillow`, `PyAutoGUI` only, PyAutoGUI `FAILSAFE = True`.
-4. Provided reference modules (`protocol.py`, `latest_slot.py`, `outbox.py`, `keymap.py`, `geometry.py`): ask before changing existing code. `demo/transport_demos.py` is never edited.
-5. Automated tests never move the real mouse and never grant control on the student's PC. Stop any running Host before the suite (it uses port 5000).
+## Project status (2026-11-26)
+The fix task and the approved extension are finished and committed on `feat/transport-dashboard`. The tree already has PING/PONG, kernel TCP statistics, the Transport dashboard, the Settings dialogs, the Menu with the Demo guide, and `tools/`; the additions are recorded in `docs/EXTENSIONS.md`. `ARCHITECTURE_FINAL_v5.md` is the spec of record and read-only — if it is wrong or silent on something that matters, stop and ask the student. Anything not already in the tree is still forbidden: never invent a protocol, port, dependency or feature.
+1. Fixed facts: TCP port 5000, one connection per Viewer, max 2 Viewers, 5-byte header `!BI`, type 1 JSON / 2 JPEG, runtime packages `mss`, `Pillow`, `PyAutoGUI` only (Scapy is only for `tools/`), PyAutoGUI `FAILSAFE = True`.
+2. Provided reference modules (`protocol.py`, `latest_slot.py`, `outbox.py`, `keymap.py`, `geometry.py`): ask before changing existing code. `demo/transport_demos.py` is never edited.
+3. Automated tests never move the real mouse and never grant control on the student's PC. Stop any running Host before the suite (it uses port 5000).
 
 ## Tools: use all of them
 Run `opencode2 mcp list` once at the start; skip servers that show failed (obsidian is currently failing). Use the others on every task and say in the report what each showed.

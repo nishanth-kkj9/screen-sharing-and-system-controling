@@ -1,6 +1,6 @@
 # Test Results — recorded honestly (section 0, rule 11)
 
-Current suite: 82 tests (sections 1, 6 and 9 describe earlier builds).
+Current suite: 127 tests (sections 1, 6 and 9 describe earlier builds).
 
 Nothing below was invented. Every line states what was actually run, where, and
 what happened. Items marked **[U]** have **not** been run on the real Windows
@@ -544,7 +544,7 @@ key presses), not by synthetic messages inside the app.
 
 ## 13. Audit defects DEF-1..DEF-6 fixed on branch `fix/audit-defects` (2026-11-24)
 
-Patch from `AGENT_FIX_GUIDE.md` section 3 applied with `git apply` (checked
+Patch from the audit fix guide (section 3) applied with `git apply` (checked
 first with `git apply --check`, exit 0); the 16 tests of section 4 added as
 `tests/test_audit_fixes.py`. Windows laptop, Python 3.15.2, project venv.
 
@@ -584,9 +584,29 @@ negative), red→green:
 | full suite | `Ran 82 tests in 27.875s` → `OK`, `compileall` exit 0 |
 | live re-check (windows-mcp, two connect/disconnect cycles) | while streaming `Total: 5.0 FPS, 429.5 KB/s`; after each disconnect, and again 6 s later: `Total: 0.0 FPS, 0.0 KB/s` — never negative. M-4 now fully met on this laptop |
 
-Still **[U]** (`AGENT_FIX_GUIDE.md` section 6): M-2 `Test-NetConnection` from a
+Still **[U]** (audit fix guide, section 6): M-2 `Test-NetConnection` from a
 second machine, M-3 capture-failure message when capture really fails, M-5
 revoke-while-typing on two laptops, M-6 Python 3.10, M-7 / E-1..E-8 (two or
 three laptops, Wireshark `.pcapng`, FIN proof, flow-control run, firewall rule
 on the second machine, 150 % scaling).
+
+## 14. Extension and Menu — live Windows results (2026-11-26)
+
+Run on this Windows laptop with windows-mcp screenshots as evidence; control was
+never granted. Branch `feat/transport-dashboard`, suite at the time: 127 tests
+`OK (skipped=1)`.
+
+| Check | Observed |
+| --- | --- |
+| Menu bar | one `Menu` button on the Host and on the Viewer: `Demo ▸` (Demo guide (6 steps)..., Save evidence snapshot..., Copy Wireshark filter ▸), `Transport Dashboard`, `Settings...`. The old two Host buttons are gone |
+| Host settings | 6 rows; opens while idle and refuses while sharing: `Stop sharing before changing settings.` |
+| Viewer settings | 3 rows including *Slow Viewer delay (ms)*; refuses while connected: `Disconnect before changing settings.` |
+| Transport dashboard | opens from the Host menu with dashes while idle and filled columns (Connected / Frames / Bytes) while sharing |
+| Demo guide step 1 (connections) | `[OK] 2 Viewer(s): 127.0.0.1:61566, 127.0.0.1:60242` |
+| Demo guide step 3 (ack/seq) | `[OK] in flight 0 B, 0 B; TCP RTT 0.27 ms, 0.13 ms` |
+| Demo guide step 4 (flow control) | `[OK] frames skipped: LAPTOP-NHODPEG5=309; smallest send window 0 B`, with the second Viewer reconnected at a 300 ms slow delay |
+| Demo guide step 5 (error control) | `[..] 0 retransmitted` — stays open on purpose, no loss was caused |
+| Evidence snapshot | *Save evidence snapshot...* wrote the file and it was read back: 6 check lines plus a per-Viewer table (App RTT 0.97 ms / 1980.08 ms, TCP RTT 0.27 ms / 0.13 ms, frames skipped 0 / 309) |
+| Earlier extension run | App RTT 0.58–1.46 ms, TCP RTT 0.15–0.29 ms, slow Viewer 1759.75 ms per frame / 1743 frames skipped / send window 0 B, pcap report 0 retransmissions |
+| Retransmission with real loss | **`[U]` not measured live** (needs Wi-Fi off 3–5 s or Clumsy on two laptops) |
 

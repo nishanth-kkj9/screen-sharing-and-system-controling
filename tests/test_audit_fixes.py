@@ -1,5 +1,5 @@
 # file: tests/test_audit_fixes.py
-"""Regression tests for the audit defects DEF-1 .. DEF-6 (see REQUIREMENTS_FOR_AGENT.md).
+"""Regression tests for the audit defects DEF-1 .. DEF-6 (audit fix guide).
 Real TCP on 127.0.0.1:5057, fake input backend and fake frames: no real mouse, no display."""
 import queue
 import socket
